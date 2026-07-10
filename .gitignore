@@ -98,3 +98,6 @@ htmlcov/
 *.bak
 *.tmp
 *.temp
+
+# local/custom LLM provider keys (user-added via Settings)
+config/custom_providers.json

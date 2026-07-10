@@ -69,6 +69,17 @@ class NameRequest(BaseModel):
     session_id: str = "default"
 
 
+class CustomProvider(BaseModel):
+    name: str
+    base_url: str
+    api_key: str = ""
+    models: list[str] = []
+
+
+class CustomName(BaseModel):
+    name: str
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -96,7 +107,64 @@ def select_model(req: ModelSelectRequest) -> dict:
     return {"current": runtime.get_model()}
 
 
-@app.get("/status")
+@app.get("/providers")
+def providers() -> dict:
+    """Which LLM providers are configured (key present) + which are active."""
+    from ai.providers import build_providers
+
+    built = build_providers()
+    configured = {p.name for p in built}
+    return {
+        "configured": sorted(configured),
+        "active": [p.name for p in runtime.providers()],
+    }
+
+
+@app.get("/providers/custom")
+def list_custom() -> dict:
+    from ai.providers import _load_custom
+
+    return {"custom": _load_custom()}
+
+
+@app.post("/providers/custom")
+def add_custom(req: "CustomProvider") -> dict:
+    """Add (or replace) a custom/local OpenAI-compatible provider.
+
+    Body: {name, base_url, api_key?, models?[]}. Persisted to
+    config/custom_providers.json and loaded into the live runtime.
+    """
+    from ai.providers import _load_custom, save_custom
+
+    name = (req.name or "").strip()
+    base = (req.base_url or "").strip()
+    if not name or not base:
+        raise HTTPException(status_code=400, detail="name and base_url are required")
+    items = _load_custom()
+    items = [c for c in items if c.get("name") != name]
+    items.append(
+        {
+            "name": name,
+            "base_url": base,
+            "api_key": (req.api_key or "").strip(),
+            "models": [m.strip() for m in (req.models or []) if m.strip()],
+        }
+    )
+    save_custom(items)
+    runtime.rebuild_providers()
+    return {"ok": True, "name": name, "active": [p.name for p in runtime.providers()]}
+
+
+@app.delete("/providers/custom")
+def delete_custom(req: "CustomName") -> dict:
+    """Remove a custom provider by name."""
+    from ai.providers import _load_custom, save_custom
+
+    name = (req.name or "").strip()
+    items = [c for c in _load_custom() if c.get("name") != name]
+    save_custom(items)
+    runtime.rebuild_providers()
+    return {"ok": True, "removed": name}
 def status() -> dict:
     """Provider/model capability snapshot for diagnostics (no network)."""
     providers = runtime.providers()

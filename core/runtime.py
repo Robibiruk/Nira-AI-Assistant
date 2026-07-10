@@ -28,6 +28,23 @@ def set_providers(providers: list) -> None:
         _providers = providers
 
 
+def rebuild_providers() -> None:
+    """Re-read provider config (env + custom JSON) and swap the list.
+
+    Used when the user adds/removes a custom/local provider from the
+    Settings UI, so the change takes effect without a restart.
+    """
+    from ai.providers import build_providers
+
+    new = build_providers()
+    set_providers(new)
+    # Drop the free-model cache so the next /models call re-fetches.
+    global _free_cache
+    with _lock:
+        _free_cache = []
+    return new
+
+
 def providers() -> list:
     """Return the configured provider list (may be empty before startup init)."""
     with _lock:

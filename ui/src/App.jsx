@@ -3,6 +3,7 @@ import LeftSidebar from './components/LeftSidebar'
 import RightSidebar from './components/RightSidebar'
 import Conversation from './components/Conversation'
 import ChatInput from './components/ChatInput'
+import SettingsPanel from './components/SettingsPanel'
 import NameModal from './components/NameModal'
 import { useNira } from './hooks/useNira'
 import { useVoice, speakNira } from './hooks/useVoice'
@@ -32,6 +33,18 @@ export default function App() {
   const [voiceOn, setVoiceOn] = useState(false)
   const [activePage, setActivePage] = useState('chat')
   const [streaming, setStreaming] = useState(false)
+  const [providersInfo, setProvidersInfo] = useState({ configured: [], active: [] })
+  const [custom, setCustom] = useState([])
+
+  const refreshProviders = () => {
+    fetch('/providers').then((r) => r.json()).then(setProvidersInfo).catch(() => {})
+    fetch('/providers/custom').then((r) => r.json()).then((d) => setCustom(d.custom || [])).catch(() => {})
+  }
+
+  useEffect(() => {
+    if (activePage === 'settings') refreshProviders()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePage])
 
   const voiceOnRef = useRef(voiceOn)
   voiceOnRef.current = voiceOn
@@ -97,11 +110,20 @@ export default function App() {
   }
 
   // Wrap sendMessage to flag streaming state.
+  const [requesting, setRequesting] = useState(false)
   const sendWrapped = (text) => {
     setStreaming(true)
+    setRequesting(true)
     sendMessage(text)
-    // Clear streaming shortly after; the hook appends the reply.
-    setTimeout(() => setStreaming(false), 1200)
+    // Clear streaming + requesting shortly after; the hook appends the reply.
+    setTimeout(() => { setStreaming(false); setRequesting(false) }, 1600)
+  }
+
+  // Tapping the AI core: if Nira is speaking -> interrupt; otherwise toggle mic.
+  const onCoreTap = () => {
+    if (micActive) { stopMic(); return }
+    if (voiceOn) { stopMic(); return } // interrupt speech
+    if (voiceSupported) startMic()
   }
 
   const busy = coreState === 'thinking' || coreState === 'executing'
@@ -126,28 +148,39 @@ export default function App() {
         userName={name}
         activePage={activePage}
         onPage={setActivePage}
-        voiceOn={voiceOn}
+        requesting={requesting}
+        speaking={voiceOn}
         voiceSupported={voiceSupported}
         micActive={micActive}
-        onToggleVoice={toggleVoice}
-        onInterrupt={() => stopMic()}
+        onCoreTap={onCoreTap}
       />
 
       <div className="column center">
-        <div className="center-header">
-          <h1 className="center-greeting">
-            Good {greetingPart}, <span className="accent">{name || 'there'}</span>.
-          </h1>
-          <p className="center-sub">How can I help today?</p>
-        </div>
-        <Conversation messages={messages} streaming={streaming} />
-        <ChatInput
-          onSend={sendWrapped}
-          disabled={busy}
-          micActive={micActive}
-          voiceSupported={voiceSupported}
-          onToggleMic={() => (micActive ? stopMic() : startMic())}
-        />
+        {activePage === 'settings' ? (
+          <SettingsPanel
+            providers={providersInfo}
+            custom={custom}
+            onAdd={refreshProviders}
+            onRemove={refreshProviders}
+          />
+        ) : (
+          <>
+            <div className="center-header">
+              <h1 className="center-greeting">
+                Good {greetingPart}, <span className="accent">{name || 'there'}</span>.
+              </h1>
+              <p className="center-sub">How can I help today?</p>
+            </div>
+            <Conversation messages={messages} streaming={streaming} />
+            <ChatInput
+              onSend={sendWrapped}
+              disabled={busy}
+              micActive={micActive}
+              voiceSupported={voiceSupported}
+              onToggleMic={() => (micActive ? stopMic() : startMic())}
+            />
+          </>
+        )}
       </div>
 
       <RightSidebar
