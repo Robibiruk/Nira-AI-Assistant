@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import LeftSidebar from './components/LeftSidebar'
-import AICore from './components/AICore'
 import MenuToggle from './components/MenuToggle'
 import RightSidebar from './components/RightSidebar'
 import Conversation from './components/Conversation'
@@ -96,16 +95,14 @@ export default function App() {
   }
 
   const handleRename = (sid, title) => {
-    const next = window.prompt('Rename session', title)
-    if (!next || !next.trim()) return
+    if (!title || !title.trim()) return
     apiFetch('/sessions/rename', {
       method: 'POST',
-      body: JSON.stringify({ sid, title: next.trim() }),
+      body: JSON.stringify({ sid, title: title.trim() }),
     }).then(() => refreshSessions())
   }
 
   const handleDelete = (sid) => {
-    if (!window.confirm('Delete this session? This cannot be undone.')) return
     apiFetch('/sessions/delete', {
       method: 'POST',
       body: JSON.stringify({ sid }),
@@ -251,7 +248,7 @@ export default function App() {
   })()
 
   return (
-    <div className={`app ${navOpen ? 'nav-open' : ''} ${activityOpen ? 'activity-open' : ''} ${activePage === 'about' ? 'app-no-right' : ''}`}>
+    <div className={`app ${navOpen ? 'nav-open' : ''} ${activityOpen ? 'activity-open' : ''} ${activePage === 'about' ? 'app-no-right app-about' : ''}`}>
       <LoadingScreen visible={loading} />
       {showGreeting && (
         <GreetingOverlay name={name} onDone={() => setShowGreeting(false)} />

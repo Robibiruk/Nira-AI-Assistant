@@ -81,6 +81,32 @@ body::before {
   grid-template-columns: 22% 1fr;
 }
 
+/* About page: hide the nav panel, show the sidebar (hamburger) icon at all widths.
+   Left column becomes a slide-in drawer like mobile. */
+.app.app-about {
+  grid-template-columns: 1fr;
+}
+.app-about .column.left {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: min(300px, 82vw);
+  z-index: 60;
+  background: var(--bg);
+  padding: 14px;
+  overflow-y: auto;
+  transform: translateX(-100%);
+  transition: transform 0.28s ease;
+  box-shadow: 24px 0 60px rgba(0, 0, 0, 0.45);
+}
+.app-about.nav-open .column.left { transform: translateX(0); }
+.app-about .topbar { display: flex; }
+.app-about .topbar .nav-toggle { display: grid; }
+.app-about .topbar .settings-toggle { display: none; }
+.app-about .menu-toggle-wrap { display: block; }
+.app-about .column.center { padding-top: 56px; }
+
 .column.left {
   min-height: 0;
 }
@@ -158,6 +184,8 @@ body::before {
 
 .column.center {
   min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
 /* On large / wide screens, keep chat content at a comfortable reading
@@ -1194,19 +1222,15 @@ body::before {
   50% { transform: scale(1.04); }
 }
 
-/* ---------- Scrollbars ---------- */
-.conversation::-webkit-scrollbar,
-.timeline::-webkit-scrollbar,
-.column::-webkit-scrollbar {
-  width: 6px;
+/* ---------- Scrollbars (global) ---------- */
+* { scrollbar-width: thin; scrollbar-color: rgba(73, 230, 255, 0.3) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(73, 230, 255, 0.28);
+  border-radius: 8px;
 }
-
-.conversation::-webkit-scrollbar-thumb,
-.timeline::-webkit-scrollbar-thumb,
-.column::-webkit-scrollbar-thumb {
-  background: rgba(73, 230, 255, 0.25);
-  border-radius: 3px;
-}
+*::-webkit-scrollbar-thumb:hover { background: rgba(73, 230, 255, 0.5); }
 
 /* ---------- Responsive: tablet + mobile drawers ---------- */
 /* Desktop (>1200px): three columns (Navigation / Conversation / Activity) — default grid above. */
@@ -1402,7 +1426,7 @@ body::before {
   text-overflow: ellipsis;
 }
 .session-meta { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
-.session-btns { display: flex; gap: 6px; flex-shrink: 0; }
+.session-btns { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
 .chip {
   background: var(--panel-2);
   border: 1px solid var(--hairline);
@@ -1415,6 +1439,38 @@ body::before {
 .chip:hover { border-color: var(--accent); }
 .chip.ghost { padding: 6px 9px; }
 .chip.danger:hover { border-color: var(--error); color: var(--error); }
+.session-title-input {
+  width: 100%;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 4px 8px;
+  outline: none;
+}
+.session-del { position: relative; display: inline-flex; }
+.session-del-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 20;
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 12px;
+  width: 200px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+.session-del-pop-btns { display: flex; gap: 8px; }
+.session-del-pop-btns .chip { flex: 1; justify-content: center; }
 
 .empty {
   color: var(--text-dim);
@@ -1827,257 +1883,6 @@ body::before {
   display: inline-block;
   /* keep each char solid (already inherits white) so the rise animation stays sharp */
 }
-
-/* ===== About page ===== */
-.about-page {
-  --lp-purple: #7c3aed;
-  --lp-pink: #FF9FFC;
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: clamp(16px, 3vw, 32px) clamp(12px, 3.5vw, 44px) 80px;
-  display: flex;
-  flex-direction: column;
-  gap: clamp(22px, 3.5vw, 36px);
-  overflow-y: auto;
-  height: 100%;
-}
-/* About spans the full content area (left sidebar -> right sidebar). */
-.app-no-right .about-page { max-width: none; }
-.about-hero-wrap {
-  position: relative;
-  z-index: 1;
-  padding-bottom: 40px;
-}
-.about-lightpillar { z-index: 0; }
-.about-hero, .about-greeting-card { position: relative; z-index: 2; }
-.about-divider {
-  height: 1px;
-  width: 100%;
-  background: linear-gradient(to right, transparent, var(--panel-2), transparent);
-}
-/* With the right sidebar hidden, use the full center width. */
-.app-no-right .about-page {
-  max-width: 1200px;
-}
-.about-hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 12px;
-  padding: 24px 0 8px;
-}
-.about-mark {
-  width: 52px;
-  height: 52px;
-  object-fit: contain;
-  filter: drop-shadow(0 0 18px var(--glow));
-}
-.about-title {
-  font-size: 40px;
-  margin: 0;
-  letter-spacing: 0.5px;
-  background: linear-gradient(90deg, var(--accent), var(--glow));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.about-tagline {
-  max-width: 560px;
-  color: var(--text-dim);
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.6;
-}
-.about-version {
-  font-size: 12px;
-  color: var(--text-dim);
-  border: 1px solid var(--panel-2);
-  border-radius: 999px;
-  padding: 4px 12px;
-  background: var(--panel);
-}
-.about-cta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 6px;
-}
-.about-greeting-card {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  background: linear-gradient(135deg, rgba(124,58,237,0.14), rgba(255,159,252,0.07));
-  border: 1px solid rgba(255,159,252,0.28);
-  border-radius: 16px;
-  padding: 18px;
-}
-.about-greeting-avatar {
-  font-size: 32px;
-  color: var(--lp-pink);
-  text-shadow: 0 0 16px var(--lp-purple);
-  flex: 0 0 auto;
-}
-.about-greeting-body { display: flex; flex-direction: column; gap: 12px; }
-.about-greeting-text { margin: 0; color: var(--text); font-size: 15px; line-height: 1.6; }
-.about-divider {
-  height: 1px;
-  width: 100%;
-  background: linear-gradient(to right, transparent, var(--lp-pink), transparent);
-}
-.about-section { display: flex; flex-direction: column; gap: 14px; }
-.about-h2 {
-  font-size: clamp(18px, 2.4vw, 22px);
-  margin: 0;
-  color: #fff;
-  font-weight: 700;
-  border-left: 3px solid var(--lp-purple);
-  padding-left: 12px;
-  text-shadow: 0 1px 10px rgba(124,58,237,0.35);
-}
-.about-text { color: #c8c8d6; font-size: 14px; line-height: 1.7; margin: 0; }
-.about-quote {
-  margin: 0;
-  border-left: 3px solid var(--glow);
-  background: var(--panel);
-  border-radius: 0 12px 12px 0;
-  padding: 14px 18px;
-  color: var(--text);
-  font-size: 14px;
-  line-height: 1.7;
-  font-style: italic;
-}
-.about-feature-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-}
-.about-feature-card {
-  background: var(--panel);
-  border: 1px solid var(--panel-2);
-  border-radius: 14px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  transition: transform 0.15s ease, border-color 0.15s ease;
-}
-/* When the feature card is a BorderGlow wrapper, let the glow be the visible
-   edge and match its radius. */
-.about-feature-grid .about-feature-card {
-  border-color: transparent;
-  border-radius: 18px;
-  overflow: visible;
-}
-.about-feature-card:hover { transform: translateY(-3px); border-color: var(--accent); }
-.about-feature-icon { font-size: 26px; }
-.about-feature-title { font-weight: 600; font-size: 14px; color: var(--text); }
-.about-feature-desc { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
-.about-split { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
-@media (max-width: 720px) { .about-split { grid-template-columns: 1fr; } }
-.about-arch { display: flex; flex-direction: column; gap: 2px; }
-.about-arch-node { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.about-arch-node > span:first-child {
-  background: var(--panel);
-  border: 1px solid var(--panel-2);
-  border-radius: 10px;
-  padding: 10px 18px;
-  width: 180px;
-  text-align: center;
-  font-size: 14px;
-  color: var(--text);
-}
-.about-arch-arrow { color: var(--accent); font-size: 18px; }
-.about-badges { display: flex; flex-wrap: wrap; gap: 8px; }
-.about-badge {
-  font-size: 12.5px;
-  border: 1px solid var(--panel-2);
-  background: var(--panel);
-  color: var(--text);
-  border-radius: 999px;
-  padding: 5px 12px;
-}
-.about-creator { display: flex; gap: clamp(20px, 3vw, 32px); align-items: flex-start; flex-wrap: wrap; }
-.about-creator-photo {
-  flex: 0 0 auto;
-  width: clamp(200px, 38%, 250px);
-  max-width: 100%;
-}
-/* Cap the tilt card height inside About so it never overflows the body column. */
-.about-creator-photo .pc-shell { max-height: 400px; }
-.AboutCreator-spacer { display: none; }
-.about-creator-avatar {
-  width: 72px; height: 72px; flex: 0 0 auto;
-  border-radius: 50%;
-  display: grid; place-items: center;
-  font-size: 24px; font-weight: 700;
-  color: #04121f;
-  background: linear-gradient(135deg, var(--accent), var(--glow));
-}
-.about-creator-body { display: flex; flex-direction: column; gap: 8px; flex: 1 1 260px; min-width: 0; }
-.about-creator-name { margin: 0; font-size: 18px; color: #fff; font-weight: 700; }
-.about-creator-bio { margin: 0; color: #c8c8d6; font-size: 14px; line-height: 1.6; }
-@media (max-width: 640px) {
-  .about-creator { flex-direction: column; }
-  .about-creator-photo { width: 100%; max-width: 320px; }
-  .about-creator-body { flex: 1 1 auto; }
-}
-.about-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.about-list li { font-size: 14px; color: var(--text); }
-.about-logoloop { width: 100%; height: 64px; margin-top: 12px; }
-@media (max-width: 720px) { .about-list-cols { grid-template-columns: 1fr; } }
-.about-done { color: var(--success) !important; }
-.about-planned { color: var(--text-dim) !important; }
-.about-kv { display: flex; flex-direction: column; gap: 8px; }
-.about-kv > div { display: flex; justify-content: space-between; font-size: 13.5px; border-bottom: 1px dashed var(--panel-2); padding-bottom: 6px; }
-.about-kv span { color: var(--text-dim); }
-.about-kv b { color: var(--text); }
-.about-ok { color: var(--success) !important; }
-.about-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.about-stat {
-  background: var(--panel);
-  border: 1px solid var(--panel-2);
-  border-radius: 12px;
-  padding: 12px;
-  text-align: center;
-}
-.about-stat-value { font-size: 20px; font-weight: 700; color: var(--accent); }
-.about-stat-label { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
-.about-easter { align-items: flex-start; }
-.about-egg-q {
-  background: var(--panel);
-  border: 1px solid var(--panel-2);
-  border-radius: 10px;
-  padding: 10px 14px;
-  color: var(--text);
-  font-size: 14px;
-  cursor: pointer;
-}
-.about-egg-q:hover { border-color: var(--accent); }
-.btn-primary {
-  background: linear-gradient(135deg, var(--accent), var(--glow));
-  color: #04121f;
-  border: none;
-  font-weight: 600;
-}
-.btn-primary:hover { filter: brightness(1.08); }
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--lp-purple), var(--lp-pink));
-  color: #fff;
-  border: none;
-  font-weight: 600;
-}
-.btn-primary:hover { filter: brightness(1.08); }
-
-/* Keep About content above the LightPillar background. */
-.about-page { position: relative; z-index: 1; }
-.about-page > section,
-.about-page > .about-greeting-card { position: relative; z-index: 1; }
-
-/* LightPillar theme colors, available globally. */
-:root { --lp-purple: #7c3aed; --lp-pink: #FF9FFC; }
 
 /* Global safety: never let the viewport force horizontal scroll / cut content. */
 html, body, #root { max-width: 100%; overflow-x: hidden; }

@@ -1,5 +1,5 @@
 # ==========================================
-# JARVIS - Git Ignore Rules
+# NIRA - Git Ignore Rules
 # ==========================================
 
 # ==========================================
@@ -42,11 +42,12 @@ ENV/
 *.swp
 *.swo
 *~
+.DS_Store
 
 # ==========================================
 # Security - API Keys & Secrets
 # ==========================================
-# Never commit these files with real API keys
+# Never commit files that may contain real secrets/keys.
 *.key
 *.keys
 *.secret
@@ -55,37 +56,25 @@ ENV/
 *.crt
 *.pfx
 
-# Local configuration files that may contain secrets
-*.local.json
-*.config.json
-!config/settings.yaml
-
-# local/custom LLM provider keys (user-added via Settings)
-config/custom_providers.json
-# external tool API keys (Google, GitHub, Spotify, ...)
-config/tool_keys.json
-config/features.json
-# Configuration file with potential secrets
+# Local config that may hold secrets — keep the example, ignore the real one.
 config/settings.yaml
 !config/settings.yaml.example
+
+# Custom provider keys, external tool keys, feature flags (user-added).
+config/custom_providers.json
+config/tool_keys.json
+config/features.json
 
 # ==========================================
 # Environment Variables
 # ==========================================
-# Backend environment
 .env
 .env.*
 !.env.example
-
-# Frontend environment (in ui/ folder)
 ui/.env
 ui/.env.*
 !ui/.env.example
-
-# Specific environment files
 OPENROUTER_API_KEY
-
-# Any environment files in subdirectories
 **/.env
 **/.env.*
 !**/.env.example
@@ -111,19 +100,13 @@ database/
 memory.db
 
 # ==========================================
-# OS Generated Files
-# ==========================================
-.DS_Store
-Thumbs.db
-
-# ==========================================
 # Logs
 # ==========================================
 *.log
 logs/
 
 # ==========================================
-# UI / Frontend
+# UI / Frontend (build artifacts)
 # ==========================================
 ui/node_modules/
 ui/dist/

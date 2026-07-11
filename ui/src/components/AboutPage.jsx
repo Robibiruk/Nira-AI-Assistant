@@ -1,355 +1,350 @@
-import { useState } from 'react'
-import LightPillar from './LightPillar'
-import BorderGlow from './BorderGlow'
-import ProfileCard from './ProfileCard'
-import LogoLoop from './LogoLoop'
-import { SiFastapi, SiReact, SiTailwindcss, SiOpenrouter, SiSqlite, SiPython, SiDocker, SiX } from 'react-icons/si'
-import { FaGithub, FaDiscord, FaLinkedin, FaEnvelope } from 'react-icons/fa'
+import { useEffect, useRef, useState } from 'react'
+import { motion, useInView } from 'motion/react'
+import {
+  Zap, ShieldCheck, Puzzle, BookOpen, ListChecks, Code, AlertCircle, Lightbulb,
+  MessageSquare, Brain, LayoutGrid, Globe, Microscope, Settings, MessageCircle, Briefcase, Mail,
+  AtSign, Video, MessagesSquare, Newspaper, FileText, ChevronRight, Star, Check, Circle, Heart,
+} from 'lucide-react'
+import Favicon from './Favicon'
+import './about.css'
 
-// Social / external links (edit to match your real profiles).
-const LINKS = {
-  github: 'https://github.com/robelbiruk',
-  docs: 'https://github.com/robelbiruk/nira#readme',
-  changelog: 'https://github.com/robelbiruk/nira/releases',
-  linkedin: 'https://www.linkedin.com/in/robelbiruk',
-  portfolio: 'https://robelbiruk.github.io',
-  email: 'mailto:robel.biruk@example.com',
-  discord: 'https://discord.gg/nira',
-  x: 'https://x.com/robelbiruk',
+// ---- Animated count-up (gradient numbers) ----
+function useCountUp(target, run) {
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    if (!run) return
+    let raf
+    const start = performance.now()
+    const dur = 1400
+    const tick = (now) => {
+      const p = Math.min(1, (now - start) / dur)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setVal(Math.round(target * eased))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, run])
+  return val
 }
 
-const FEATURES = [
-  { icon: '🧠', title: 'Long-term Memory', desc: 'Stores preferences and conversation history.' },
-  { icon: '🌐', title: 'Web & Research', desc: 'Search the web, Reddit, GitHub, arXiv, and more.' },
-  { icon: '📂', title: 'File Assistant', desc: 'Read, write, organize, and summarize files.' },
-  { icon: '🖥', title: 'Terminal', desc: 'Execute local commands safely.' },
-  { icon: '🎤', title: 'Voice', desc: 'Speech-to-text and text-to-speech.' },
-  { icon: '🧮', title: 'Calculator', desc: 'Reliable mathematical computations.' },
-  { icon: '🤖', title: 'Multiple AI Providers', desc: 'OpenRouter, Gemini, NVIDIA NIM, Ollama, and more.' },
-  { icon: '🔌', title: 'Plugin Ready', desc: 'Extend Nira with custom tools and integrations.' },
-]
-
-const STACK = [
-  'Python', 'FastAPI', 'React', 'Tailwind CSS', 'SQLite', 'OpenRouter',
-  'Playwright', 'Whisper', 'Kokoro TTS', 'Docker',
-]
-
-const ROADMAP_DONE = ['Chat', 'Memory', 'Browser', 'Terminal', 'File Tools']
-const ROADMAP_PLANNED = [
-  'Voice Assistant', 'Plugin Marketplace', 'Mobile App',
-  'Smart Home Integration', 'Multi-Agent System',
-]
-
-const CREDITS = ['FastAPI', 'React', 'Tailwind CSS', 'OpenRouter', 'Playwright', 'Whisper', 'SQLite']
-
-// Logo marquee data — real brand icons (react-icons) on a black backdrop.
-const ICON_STYLE = { color: '#e7e7ef', fontSize: 26 }
-const CREDIT_LOGOS = [
-  { node: <SiReact style={ICON_STYLE} />, title: 'React', href: 'https://react.dev' },
-  { node: <SiTailwindcss style={ICON_STYLE} />, title: 'Tailwind CSS', href: 'https://tailwindcss.com' },
-  { node: <SiFastapi style={ICON_STYLE} />, title: 'FastAPI', href: 'https://fastapi.tiangolo.com' },
-  { node: <SiOpenrouter style={ICON_STYLE} />, title: 'OpenRouter', href: 'https://openrouter.ai' },
-  { node: <SiSqlite style={ICON_STYLE} />, title: 'SQLite', href: 'https://sqlite.org' },
-  { node: <SiPython style={ICON_STYLE} />, title: 'Python', href: 'https://python.org' },
-  { node: <SiDocker style={ICON_STYLE} />, title: 'Docker', href: 'https://docker.com' },
-]
-const COMMUNITY_LOGOS = [
-  { node: <FaGithub style={ICON_STYLE} />, href: LINKS.github, title: 'GitHub' },
-  { node: <FaDiscord style={ICON_STYLE} />, href: LINKS.discord, title: 'Discord' },
-  { node: <FaLinkedin style={ICON_STYLE} />, href: LINKS.linkedin, title: 'LinkedIn' },
-  { node: <SiX style={ICON_STYLE} />, href: LINKS.x, title: 'X' },
-  { node: <FaEnvelope style={ICON_STYLE} />, href: LINKS.email, title: 'Email' },
-]
-
-const STATS = [
-  { label: 'Conversations', value: '523' },
-  { label: 'Commands Executed', value: '1,942' },
-  { label: 'Research Sessions', value: '314' },
-  { label: 'Files Processed', value: '428' },
-  { label: 'Memory Entries', value: '126' },
-  { label: 'Uptime', value: '99.9%' },
-]
-
-const ARCH = ['User', 'Nira Core', 'Planner', 'Memory', 'Tool Router', 'AI Provider']
-
-function ExtLink({ href, children, primary }) {
+function Stat({ num, label, run }) {
+  const display = useCountUp(num, run)
   return (
-    <a className={`btn-ghost ${primary ? 'btn-primary' : ''}`} href={href} target="_blank" rel="noreferrer">
-      {children}
-    </a>
+    <motion.div className="na-card na-stat" whileHover={{ y: -4 }}>
+      <span className="na-stat__num">
+        {num === 99.9 ? '99.9%' : display.toLocaleString()}
+      </span>
+      <span className="na-stat__label">{label}</span>
+    </motion.div>
   )
 }
 
-export default function AboutPage({ onSend }) {
-  const [storyOpen, setStoryOpen] = useState(false)
+// Reveal-on-scroll wrapper
+function Reveal({ children, delay = 0, className = '' }) {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: '-60px' })
+  return (
+    <motion.div
+      ref={ref}
+      className={className}
+      initial={{ opacity: 0, y: 24 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.55, delay, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {children}
+    </motion.div>
+  )
+}
 
-  const askNira = () => {
-    if (onSend) onSend("Tell me about yourself, Nira — who are you and what inspired your name?")
-  }
+const STATS = [
+  { num: 523, label: 'Conversations' },
+  { num: 1942, label: 'Commands Executed' },
+  { num: 314, label: 'Research Sessions' },
+  { num: 428, label: 'Files Processed' },
+  { num: 126, label: 'Memory Entries' },
+  { num: 99.9, label: 'Uptime' },
+]
+
+const FEATURES = [
+  { icon: MessageSquare, title: 'Chat', desc: 'Natural, multi-turn conversations with powerful AI models.' },
+  { icon: Brain, title: 'Memory', desc: 'Long-term recall of your context, facts and preferences.' },
+  { icon: LayoutGrid, title: 'Apps', desc: 'Launch and orchestrate tools as mini-applications.' },
+  { icon: Globe, title: 'Browser', desc: 'Browse, summarize and act on web content in-app.' },
+  { icon: Microscope, title: 'Research', desc: 'Deep research with citations and structured notes.' },
+  { icon: Settings, title: 'Settings', desc: 'Fine-tune models, providers, tools and behavior.' },
+]
+
+const SOCIALS = [
+  { fa: 'fa-brands fa-github', label: 'GitHub', href: 'https://github.com/Robibiruk' },
+  { fa: 'fa-brands fa-linkedin-in', label: 'LinkedIn', href: 'https://www.linkedin.com/in/robel-biruk-5923101b5/' },
+  { fa: 'fa-solid fa-envelope', label: 'Email', href: 'mailto:natim7520@gmail.com' },
+  { fa: 'fa-brands fa-instagram', label: 'Instagram', href: 'https://www.instagram.com/ynw_rob.i/' },
+  { fa: 'fa-brands fa-tiktok', label: 'TikTok', href: 'https://www.tiktok.com/@ynwrobiii' },
+  { fa: 'fa-brands fa-pinterest', label: 'Pinterest', href: 'https://www.pinterest.com/ynwrobii/' },
+  { fa: 'fa-solid fa-globe', label: 'Portfolio', href: 'https://robel-portfolio-website.netlify.app/' },
+]
+
+const QUICK_LINKS = [
+  { icon: BookOpen, title: 'Documentation', desc: 'Guides and references', href: '#' },
+  { icon: ListChecks, title: 'Changelog', desc: 'What changed recently', href: '#' },
+  { icon: Code, title: 'GitHub Repository', desc: 'Source code', href: '#' },
+  { icon: AlertCircle, title: 'Report an Issue', desc: 'Found a bug?', href: '#' },
+  { icon: Lightbulb, title: 'Request a Feature', desc: 'Suggest an idea', href: '#' },
+]
+
+const ROAD_DONE = ['Smart Chat', 'Browser', 'File Tools', 'Research', 'Voice Assistant']
+const ROAD_TODO = ['Plugin Marketplace', 'Mobile App', 'Multi-Agent System', 'Smart Home Integration']
+
+const VERSIONS = [
+  ['Nira Version', '0.9 Beta'],
+  ['Build', '2026.07.01'],
+  ['Python', '3.12'],
+  ['React', '18.3'],
+  ['API Status', 'Operational'],
+  ['Environment', 'Desktop'],
+]
+
+const CHECKLIST = ['Multi-model AI', 'Tool-based Intelligence', 'Long-term Memory', 'Privacy First', 'Open Source']
+
+export default function AboutPage() {
+  const statsRef = useRef(null)
+  const statsInView = useInView(statsRef, { once: true, margin: '-80px' })
 
   return (
-    <div className="about-page">
-      <div className="about-hero-wrap">
-        <LightPillar
-          className="about-lightpillar"
-          topColor="#5227FF"
-          bottomColor="#FF9FFC"
-          intensity={1}
-          rotationSpeed={0.3}
-          glowAmount={0.002}
-          pillarWidth={3}
-          pillarHeight={0.4}
-          noiseIntensity={0.5}
-          pillarRotation={25}
-          interactive={false}
-          mixBlendMode="screen"
-          quality="high"
-        />
-        {/* HERO */}
-        <section className="about-hero">
-          <img className="about-mark" src="/favicon-32.png" alt="Nira" width={48} height={48} />
-          <h1 className="about-title">Nira AI</h1>
-          <p className="about-tagline">
-            A local-first intelligent desktop assistant designed to help you think, build,
-            research, and automate everyday tasks.
-          </p>
-          <span className="about-version">Version 0.9.0 Beta</span>
-          <div className="about-cta">
-            <ExtLink href={LINKS.github} primary>⭐ GitHub</ExtLink>
-            <ExtLink href={LINKS.docs}>📖 Documentation</ExtLink>
-            <ExtLink href={LINKS.changelog}>🚀 Changelog</ExtLink>
-          </div>
-        </section>
-
-        {/* INTERACTIVE GREETING */}
-        <section className="about-greeting-card">
-          <div className="about-greeting-avatar"><img src="/favicon-32.png" alt="Nira" width={36} height={36} /></div>
-          <div className="about-greeting-body">
-            <p className="about-greeting-text">
-              Hello, I'm <b>Nira</b>. I'm your AI assistant, built to help you research, create,
-              and automate tasks. Here's a little about me…
-            </p>
-            <button className="btn-ghost btn-primary" onClick={askNira}>💬 Ask Nira about herself</button>
-          </div>
-        </section>
-      </div>
-
-      {/* divider below hero */}
-      <div className="about-divider" />
-
-      {/* WHAT IS NIRA */}
-      <section className="about-section">
-        <h2 className="about-h2">What is Nira?</h2>
-        <blockquote className="about-quote">
-          Nira is a Python-powered AI desktop assistant that combines modern language models
-          with local tools, browser automation, research capabilities, memory, and voice
-          interaction. Rather than relying solely on one AI model, Nira uses specialized tools
-          to perform tasks accurately and efficiently.
-        </blockquote>
-      </section>
-
-      {/* FEATURES */}
-      <section className="about-section">
-        <h2 className="about-h2">Features</h2>
-        <div className="about-feature-grid">
-          {FEATURES.map((f) => (
-            <BorderGlow
-              key={f.title}
-              className="about-feature-card"
-              edgeSensitivity={30}
-              glowColor="40 80 80"
-              backgroundColor="#120F17"
-              borderRadius={18}
-              glowRadius={30}
-              glowIntensity={1}
-              coneSpread={25}
-              animated={false}
-              colors={['#c084fc', '#f472b6', '#38bdf8']}
-              fillOpacity={0.5}
-            >
-              <div className="about-feature-icon">{f.icon}</div>
-              <div className="about-feature-title">{f.title}</div>
-              <div className="about-feature-desc">{f.desc}</div>
-            </BorderGlow>
-          ))}
-        </div>
-      </section>
-
-      {/* ARCHITECTURE + STACK */}
-      <section className="about-section about-split">
-        <div>
-          <h2 className="about-h2">Architecture</h2>
-          <div className="about-arch">
-            {ARCH.map((node, i) => (
-              <div key={node} className="about-arch-node">
-                <span>{node}</span>
-                {i < ARCH.length - 1 && <span className="about-arch-arrow">↓</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div>
-          <h2 className="about-h2">Technology Stack</h2>
-          <div className="about-badges">
-            {STACK.map((s) => (
-              <span className="about-badge" key={s}>{s}</span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CREATOR */}
-      <section className="about-section">
-        <h2 className="about-h2">Meet the Creator</h2>
-        <div className="about-creator">
-          <div className="about-creator-photo">
-            <ProfileCard
-              avatarUrl="/Me.jpg"
-              name="Robel Biruk"
-              title="Pharmacy Student · Software Developer"
-              handle="robelbiruk"
-              status="Building Nira"
-              contactText="Email Me"
-              behindGlowColor="rgba(125, 190, 255, 0.67)"
-              innerGradient="linear-gradient(145deg,#60496e8c 0%,#71C4FF44 100%)"
-              enableTilt
-              showUserInfo
-              onContactClick={() => window.open(LINKS.email, '_blank')}
-            />
-          </div>
-          <div className="about-creator-body">
-            <h3 className="about-creator-name">Robel Biruk</h3>
-            <p className="about-creator-bio">
-              Pharmacy student and software developer passionate about AI, automation, and
-              human-centered interfaces.
-            </p>
-            <div className="about-cta">
-              <ExtLink href={LINKS.github}>GitHub</ExtLink>
-              <ExtLink href={LINKS.linkedin}>LinkedIn</ExtLink>
-              <ExtLink href={LINKS.portfolio}>Portfolio</ExtLink>
-              <ExtLink href={LINKS.email}>Email</ExtLink>
+    <motion.div
+      className="nira-about"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.6 }}
+    >
+      <div className="na-grid">
+        {/* Header */}
+        <Reveal className="na-col-12">
+          <header className="na-header">
+            <div>
+              <h1 className="na-h1">About Nira</h1>
+              <p className="na-header__sub">Learn more about your intelligent desktop assistant.</p>
             </div>
-          </div>
-        </div>
-      </section>
+            <span className="na-version-badge"><Star size={14} /> Nira 0.9 Beta</span>
+          </header>
+        </Reveal>
 
-      {/* OPEN SOURCE */}
-      <section className="about-section about-split">
-        <div>
-          <h2 className="about-h2">Open Source</h2>
-          <p className="about-text">
-            Nira is released under the <b>MIT License</b>. Contributions are welcome — bug
-            reports, feature requests, and pull requests all help make Nira better.
-          </p>
-          <div className="about-cta">
-            <ExtLink href={LINKS.github} primary>🔧 Contribute</ExtLink>
-            <ExtLink href={`${LINKS.github}/issues`}>🐞 Report Bug</ExtLink>
-            <ExtLink href={`${LINKS.github}/discussions`}>💬 Discussions</ExtLink>
-          </div>
-        </div>
-        <div>
-          <h2 className="about-h2">Roadmap</h2>
-          <ul className="about-list">
-            {ROADMAP_DONE.map((r) => (
-              <li key={r} className="about-done">✓ {r}</li>
-            ))}
-            {ROADMAP_PLANNED.map((r) => (
-              <li key={r} className="about-planned">○ {r}</li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      {/* PRIVACY */}
-      <section className="about-section">
-        <h2 className="about-h2">Privacy</h2>
-        <ul className="about-list about-list-cols">
-          <li><b>Local data storage</b> — conversations and memory live on your machine (SQLite).</li>
-          <li><b>What is sent to AI providers</b> — only your prompt and tool context, nothing else.</li>
-          <li><b>API key handling</b> — keys stay in your local config; never committed or shared.</li>
-          <li><b>Telemetry</b> — none. Nira does not phone home.</li>
-        </ul>
-      </section>
-
-      {/* CREDITS */}
-      <section className="about-section">
-        <h2 className="about-h2">Credits</h2>
-        <p className="about-text">Built on the shoulders of these open-source projects:</p>
-        <div className="about-logoloop">
-          <LogoLoop
-            logos={CREDIT_LOGOS}
-            speed={80}
-            direction="left"
-            logoHeight={26}
-            gap={40}
-            pauseOnHover
-            fadeOut
-            scaleOnHover
-            ariaLabel="Open-source projects Nira is built on"
-          />
-        </div>
-      </section>
-
-      {/* COMMUNITY */}
-      <section className="about-section">
-        <h2 className="about-h2">Community</h2>
-        <div className="about-logoloop">
-          <LogoLoop
-            logos={COMMUNITY_LOGOS}
-            speed={90}
-            direction="left"
-            logoHeight={26}
-            gap={48}
-            pauseOnHover
-            fadeOut
-            scaleOnHover
-            ariaLabel="Nira community links"
-          />
-        </div>
-        <div className="about-cta" style={{ marginTop: 16 }}>
-          <ExtLink href={LINKS.github} primary>⭐ Star on GitHub</ExtLink>
-        </div>
-      </section>
-
-      {/* VERSION */}
-      <section className="about-section about-split">
-        <div>
-          <h2 className="about-h2">Version Information</h2>
-          <div className="about-kv">
-            <div><span>Nira</span><b>0.9.0 Beta</b></div>
-            <div><span>Build</span><b>2026.07.11</b></div>
-            <div><span>Python</span><b>3.14</b></div>
-            <div><span>React</span><b>19</b></div>
-            <div><span>API Status</span><b className="about-ok">● Online</b></div>
-          </div>
-        </div>
-        <div>
-          <h2 className="about-h2">Fun Statistics</h2>
-          <div className="about-stats">
-            {STATS.map((s) => (
-              <div className="about-stat" key={s.label}>
-                <div className="about-stat-value">{s.value}</div>
-                <div className="about-stat-label">{s.label}</div>
+        {/* Hero (8) + Quick Links (4) */}
+        <Reveal className="na-col-8">
+          <section className="na-panel na-hero">
+            <div className="na-hero__inner">
+              <Favicon className="na-favicon--hero" />
+              <div className="na-hero__copy">
+                <h2 className="na-gradient">Nira AI</h2>
+                <p>
+                  Your intelligent desktop assistant built to help you think, research, create and automate.
+                </p>
+                <p>
+                  Nira combines powerful AI models with specialized tools, memory and voice into one seamless desktop experience.
+                </p>
+                <div className="na-pills">
+                  <span className="na-pill"><Zap size={16} /> Fast</span>
+                  <span className="na-pill"><ShieldCheck size={16} /> Private</span>
+                  <span className="na-pill"><Puzzle size={16} /> Extensible</span>
+                </div>
               </div>
+            </div>
+          </section>
+        </Reveal>
+
+        <Reveal className="na-col-4" delay={0.08}>
+          <section className="na-panel na-quicklinks">
+            <h2 className="na-h3">Quick Links</h2>
+            {QUICK_LINKS.map((l) => (
+              <a key={l.title} className="na-ql-item" href={l.href}>
+                <span className="na-ql-icon"><l.icon size={18} /></span>
+                <span className="na-ql-text">
+                  <span className="na-ql-title">{l.title}</span>
+                  <span className="na-ql-desc">{l.desc}</span>
+                </span>
+                <ChevronRight className="na-ql-chev" size={16} />
+              </a>
             ))}
+            <a className="na-btn na-btn--purple" href="https://github.com" target="_blank" rel="noreferrer">
+              <Star size={16} /> Star on GitHub
+            </a>
+          </section>
+        </Reveal>
+
+        {/* Version + Stats — fixed 537x385 boxes (Option 2) + rotating astronaut (PC/large only) */}
+        <div className="na-col-12">
+          <div className="na-fixed-row">
+            <Reveal className="na-fixed-box na-fixed-box--sm">
+              <section className="na-panel">
+                <h2 className="na-h2">Version Information</h2>
+                <div className="na-version-grid">
+                  <div className="na-vtable">
+                    {VERSIONS.map(([k, v]) => (
+                      <div className="na-vrow" key={k}><span>{k}</span><b>{v}</b></div>
+                    ))}
+                  </div>
+                  <Favicon className="na-favicon--globe" />
+                </div>
+              </section>
+            </Reveal>
+
+            <Reveal className="na-fixed-box na-fixed-box--sm" delay={0.08}>
+              <section className="na-panel">
+                <h2 className="na-h2">Statistics</h2>
+                <div className="na-stats" ref={statsRef}>
+                  {STATS.map((s) => (
+                    <Stat key={s.label} num={s.num} label={s.label} run={statsInView} />
+                  ))}
+                </div>
+              </section>
+            </Reveal>
           </div>
         </div>
-      </section>
 
-      {/* EASTER EGG */}
-      <section className="about-section about-easter">
-        <h2 className="about-h2">A little something</h2>
-        <button className="about-egg-q" onClick={() => setStoryOpen((v) => !v)}>
-          💡 What inspired the name “Nira”?
-        </button>
-        {storyOpen && (
-          <p className="about-quote">
-            “Nira” means “of the water / lotus” in several languages — calm on the surface,
-            deep underneath. That's the kind of assistant I wanted to build: quiet, present,
-            and surprisingly capable when you need it. Tap the core anytime and just talk.
-          </p>
-        )}
-      </section>
-    </div>
+        {/* What is Nira (full) + Core Features (full) — stacked vertically */}
+        <Reveal className="na-col-12">
+          <section className="na-panel">
+            <h2 className="na-h2">What is Nira?</h2>
+            <p className="na-text">
+              Nira is a calm, intelligent desktop companion that blends conversation, specialized tools,
+              long-term memory and natural voice into a single operating-system-like experience.
+            </p>
+            <ul className="na-checklist">
+              {CHECKLIST.map((c) => (
+                <li key={c}><Check className="na-check" size={18} /> {c}</li>
+              ))}
+            </ul>
+          </section>
+        </Reveal>
+
+        <Reveal className="na-col-12" delay={0.08}>
+          <section className="na-panel">
+            <h2 className="na-h2">Core Features</h2>
+            <div className="na-features">
+              {FEATURES.map((f) => (
+                <motion.div key={f.title} className="na-card na-feature" whileHover={{ y: -4 }}>
+                  <span className="na-feature__icon"><f.icon size={22} /></span>
+                  <span className="na-feature__title">{f.title}</span>
+                  <span className="na-feature__desc">{f.desc}</span>
+                </motion.div>
+              ))}
+            </div>
+          </section>
+        </Reveal>
+
+        {/* Community (full) */}
+        <Reveal className="na-col-12">
+          <section className="na-panel na-community">
+            <h2 className="na-h2">Join the Community</h2>
+            <div className="na-socials">
+              {SOCIALS.map((s) => (
+                <motion.a
+                  key={s.label}
+                  className="na-social"
+                  href={s.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={s.label}
+                  whileHover={{ rotate: 5, scale: 1.08 }}
+                >
+                  <i className={s.fa} />
+                </motion.a>
+              ))}
+            </div>
+          </section>
+        </Reveal>
+
+        {/* Creator (8) + Roadmap (4) */}
+        <Reveal className="na-col-8">
+          <section className="na-panel na-creator">
+            <img className="na-creator__avatar" src="/Me.jpg" alt="Robel Biruk" />
+            <div className="na-creator__body">
+              <div className="na-creator__head">
+                <p className="na-creator__name">Robel Biruk</p>
+                <p className="na-creator__sub">Developer &amp; Creator of Nira AI</p>
+              </div>
+              <p className="na-creator__bio">
+                Pharmacy student and software developer passionate about AI, automation and human-centered interfaces.
+              </p>
+              <p className="na-creator__install">
+                <i className="fa-solid fa-mobile-screen" /> Installable as a PWA — use your browser&apos;s “Install app” / “Add to Home Screen” option.
+              </p>
+              <div className="na-creator__links">
+                <a className="na-btn" href="https://github.com/Robibiruk" target="_blank" rel="noreferrer"><i className="fa-brands fa-github" /> GitHub</a>
+                <a className="na-btn" href="https://www.linkedin.com/in/robel-biruk-5923101b5/" target="_blank" rel="noreferrer"><i className="fa-brands fa-linkedin-in" /> LinkedIn</a>
+                <a className="na-btn" href="https://robel-portfolio-website.netlify.app/" target="_blank" rel="noreferrer"><i className="fa-solid fa-globe" /> Portfolio</a>
+              </div>
+            </div>
+          </section>
+        </Reveal>
+
+        <Reveal className="na-col-4" delay={0.08}>
+          <section className="na-panel">
+            <h2 className="na-h2">Roadmap</h2>
+            <div className="na-timeline">
+              <div className="na-road-group">Completed</div>
+              {ROAD_DONE.map((r) => (
+                <div className="na-road-item" key={r}><Check className="na-road-done" size={18} /> {r}</div>
+              ))}
+              <div className="na-road-group">Upcoming</div>
+              {ROAD_TODO.map((r) => (
+                <div className="na-road-item" key={r}><Circle className="na-road-todo" size={18} /> {r}</div>
+              ))}
+            </div>
+          </section>
+        </Reveal>
+
+        {/* License + Contributing compact cards */}
+        <Reveal className="na-col-12">
+          <section className="na-panel na-license">
+            <h2 className="na-h2">Open Source</h2>
+            <div className="na-license__cards">
+              <div className="na-license__card">
+                <div className="na-license__icon">🛡</div>
+                <div className="na-license__body">
+                  <p className="na-license__title">License</p>
+                  <p className="na-license__desc">
+                    Nira AI is open source and freely available under the MIT License.
+                  </p>
+                  <p className="na-license__meta">Copyright © 2026 Robel Biruk</p>
+                  <a className="na-btn na-btn--green" href="https://github.com/Robibiruk/nira-ai/blob/main/LICENSE" target="_blank" rel="noreferrer"><FileText size={16} /> View Full License</a>
+                </div>
+              </div>
+              <div className="na-license__card">
+                <div className="na-license__icon">🤝</div>
+                <div className="na-license__body">
+                  <p className="na-license__title">Contributing</p>
+                  <p className="na-license__desc">
+                    Help improve Nira AI by reporting bugs, suggesting ideas, improving docs, or contributing code.
+                  </p>
+                  <a className="na-btn" href="https://github.com/Robibiruk/nira-ai/blob/main/CONTRIBUTING.md" target="_blank" rel="noreferrer"><FileText size={16} /> Contribution Guide</a>
+                </div>
+              </div>
+            </div>
+          </section>
+        </Reveal>
+
+        {/* Footer (full) */}
+        <Reveal className="na-col-12">
+          <footer className="na-footer">
+            <div className="na-footer__marquee">
+              <p className="na-footer__quote audiowide-regular">
+                " Nira is more than just an assistant—it&apos;s a partner in your journey to get things done.&nbsp;&nbsp;&nbsp;
+              </p>
+              <p className="na-footer__quote audiowide-regular" aria-hidden="true">
+                " Nira is more than just an assistant—it&apos;s a partner in your journey to get things done.&nbsp;&nbsp;&nbsp;
+              </p>
+            </div>
+            <div className="na-footer__bottom">
+              <span>Made with <Heart size={14} className="na-heart" /> by Robel Biruk</span>
+              <span className="center">Thank you for being part of the journey.</span>
+              <span>&copy;2026 Nira AI</span>
+              <Favicon className="na-favicon--orb" />
+            </div>
+          </footer>
+        </Reveal>
+      </div>
+    </motion.div>
   )
 }
