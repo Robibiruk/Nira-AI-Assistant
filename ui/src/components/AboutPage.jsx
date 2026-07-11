@@ -308,7 +308,7 @@ export default function AboutPage() {
                     Nira AI is open source and freely available under the MIT License.
                   </p>
                   <p className="na-license__meta">Copyright © 2026 Robel Biruk</p>
-                  <a className="na-btn na-btn--green" href="https://github.com/Robibiruk/nira-ai/blob/main/LICENSE" target="_blank" rel="noreferrer"><FileText size={16} /> View Full License</a>
+                  <a className="na-btn na-btn--green" href="https://github.com/Robibiruk/Nira-AI-Assistant/blob/main/LICENSE.md" target="_blank" rel="noreferrer"><FileText size={16} /> View Full License</a>
                 </div>
               </div>
               <div className="na-license__card">
@@ -318,7 +318,7 @@ export default function AboutPage() {
                   <p className="na-license__desc">
                     Help improve Nira AI by reporting bugs, suggesting ideas, improving docs, or contributing code.
                   </p>
-                  <a className="na-btn" href="https://github.com/Robibiruk/nira-ai/blob/main/CONTRIBUTING.md" target="_blank" rel="noreferrer"><FileText size={16} /> Contribution Guide</a>
+                  <a className="na-btn" href="https://github.com/Robibiruk/Nira-AI-Assistant/blob/main/CONTRIBUTING.md" target="_blank" rel="noreferrer"><FileText size={16} /> Contribution Guide</a>
                 </div>
               </div>
             </div>

@@ -12,8 +12,8 @@ We welcome bug reports, feature requests, documentation improvements, UI enhance
 2. Clone your fork.
 
    ```bash
-   git clone https://github.com/Robibiruk/nira-ai.git
-   cd nira-ai
+   git clone https://github.com/Robibiruk/Nira-AI-Assistant.git
+   cd Nira-AI-Assistant
    ```
 
 3. Install backend dependencies.

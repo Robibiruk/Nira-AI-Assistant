@@ -123,8 +123,8 @@ User Request → FastAPI Endpoint → Assistant → AI Model + Tools → Respons
 
 ### 1. Clone
 ```bash
-git clone https://github.com/Robibiruk/nira-ai.git
-cd nira-ai
+git clone https://github.com/Robibiruk/Nira-AI-Assistant.git
+cd Nira-AI-Assistant
 ```
 
 ### 2. Backend
@@ -240,7 +240,7 @@ tools:
 ## 📦 Project Structure
 
 ```
-nira-ai/
+Nira-AI-Assistant/
 ├── app.py                  # FastAPI entry point (also serves built UI)
 ├── config.py               # Configuration loader
 ├── requirements.txt        # Python dependencies
