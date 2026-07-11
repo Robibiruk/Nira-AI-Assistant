@@ -300,7 +300,7 @@ export default function AboutPage() {
           <section className="na-panel na-license">
             <h2 className="na-h2">Open Source</h2>
             <div className="na-license__cards">
-              <div className="na-license__card">
+              <div className="na-license__card na-license__card--license">
                 <div className="na-license__icon">🛡</div>
                 <div className="na-license__body">
                   <p className="na-license__title">License</p>
@@ -311,7 +311,7 @@ export default function AboutPage() {
                   <a className="na-btn na-btn--green" href="https://github.com/Robibiruk/Nira-AI-Assistant/blob/main/LICENSE.md" target="_blank" rel="noreferrer"><FileText size={16} /> View Full License</a>
                 </div>
               </div>
-              <div className="na-license__card">
+              <div className="na-license__card na-license__card--contrib">
                 <div className="na-license__icon">🤝</div>
                 <div className="na-license__body">
                   <p className="na-license__title">Contributing</p>
