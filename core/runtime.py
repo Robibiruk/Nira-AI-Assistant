@@ -80,6 +80,19 @@ def _fetch_free() -> list[dict]:
                         "provider": p.name,
                     }
                 )
+        else:
+            # Custom/local provider with no fixed model list (Jan, Ollama,
+            # LM Studio, vLLM): auto-discover from its /v1/models endpoint.
+            discovered = provider_mod.list_openai_compatible_models(p.base_url, p.api_key)
+            for m in discovered:
+                out.append(
+                    {
+                        "id": f"{p.name}|{m['id']}",
+                        "name": f"{m['id']} ({p.name})",
+                        "context_length": m.get("context_length"),
+                        "provider": p.name,
+                    }
+                )
     out.sort(key=lambda x: (x.get("name") or "").lower())
     return out
 

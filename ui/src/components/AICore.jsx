@@ -208,6 +208,7 @@ export default function AICore({
     <div
       className={`core-wrap ${interactive ? 'interactive' : ''}`}
       onClick={interactive ? onTap : undefined}
+      onPointerDown={interactive ? onTap : undefined}
       role={interactive ? 'button' : undefined}
       tabIndex={interactive ? 0 : undefined}
       title={interactive ? (micActive ? 'Tap to stop' : speaking ? 'Tap to interrupt' : 'Tap to talk') : undefined}
@@ -217,8 +218,7 @@ export default function AICore({
       <div
         className="core-label"
         style={{
-          position: 'absolute',
-          bottom: -20,
+          position: 'relative',
           display: 'flex',
           gap: 8,
           alignItems: 'center',

@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import LeftSidebar from './components/LeftSidebar'
+import AICore from './components/AICore'
+import MenuToggle from './components/MenuToggle'
 import RightSidebar from './components/RightSidebar'
 import Conversation from './components/Conversation'
 import ChatInput from './components/ChatInput'
 import SettingsPanel from './components/SettingsPanel'
 import NameModal from './components/NameModal'
+import MemoryPage from './components/MemoryPage'
+import AppsPage from './components/AppsPage'
+import BrowserPage from './components/BrowserPage'
+import ResearchPage from './components/ResearchPage'
+import AboutPage from './components/AboutPage'
+import LoadingScreen from './components/LoadingScreen'
+import GreetingOverlay from './components/GreetingOverlay'
 import { useNira } from './hooks/useNira'
-import { useVoice, speakNira } from './hooks/useVoice'
+import { useVoice, speakNira, stopSpeech, enqueueNira } from './hooks/useVoice'
+import { apiFetch } from './api'
 
 const NAME_KEY = 'nira_name'
 
@@ -32,33 +42,117 @@ export default function App() {
   const [toast, setToast] = useState('')
   const [voiceOn, setVoiceOn] = useState(false)
   const [activePage, setActivePage] = useState('chat')
+  const [navOpen, setNavOpen] = useState(false)
+  const [activityOpen, setActivityOpen] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [providersInfo, setProvidersInfo] = useState({ configured: [], active: [] })
   const [custom, setCustom] = useState([])
+  const [toolKeys, setToolKeys] = useState({})
+  const [features, setFeatures] = useState({})
+  const [sessionId, setSessionIdState] = useState(() => `web-${Date.now()}`)
+  const [sessions, setSessions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showGreeting, setShowGreeting] = useState(false)
+
+  // Boot sequence: show NIRA loading screen, then immediately switch to the welcome
+  // greeting (which is a full-screen fixed overlay, so it covers the app — no gap).
+  useEffect(() => {
+    const hideLoading = setTimeout(() => setLoading(false), 1400)
+    const showWelcome = setTimeout(() => setShowGreeting(true), 1400)
+    return () => { clearTimeout(hideLoading); clearTimeout(showWelcome) }
+  }, [])
 
   const refreshProviders = () => {
-    fetch('/providers').then((r) => r.json()).then(setProvidersInfo).catch(() => {})
-    fetch('/providers/custom').then((r) => r.json()).then((d) => setCustom(d.custom || [])).catch(() => {})
+    apiFetch('/providers').then((r) => r.ok && setProvidersInfo(r.data || {}))
+    apiFetch('/providers/custom').then((r) => r.ok && setCustom((r.data && r.data.custom) || []))
+  }
+  const refreshToolKeys = () => {
+    apiFetch('/tools/keys').then((r) => r.ok && setToolKeys((r.data && r.data.keys) || {}))
+  }
+
+  // Load saved chat sessions (with auto titles) for the Memory page.
+  const refreshSessions = () => {
+    apiFetch('/sessions').then((r) => r.ok && setSessions((r.data && r.data.sessions) || []))
+  }
+
+  // Start a fresh session: new id, empty transcript.
+  const handleNewChat = () => {
+    const id = `web-${Date.now()}`
+    setSessionIdState(id)
+    nira.setSessionId(id)
+    nira.loadMessages([])
+    setActivePage('chat')
+  }
+
+  // Resume a past session: load its messages into the transcript.
+  const handleResume = (sid) => {
+    apiFetch(`/sessions/${sid}`).then((r) => {
+      if (!r.ok) return
+      setSessionIdState(sid)
+      nira.setSessionId(sid)
+      nira.loadMessages(r.data.messages || [])
+      setActivePage('chat')
+    })
+  }
+
+  const handleRename = (sid, title) => {
+    const next = window.prompt('Rename session', title)
+    if (!next || !next.trim()) return
+    apiFetch('/sessions/rename', {
+      method: 'POST',
+      body: JSON.stringify({ sid, title: next.trim() }),
+    }).then(() => refreshSessions())
+  }
+
+  const handleDelete = (sid) => {
+    if (!window.confirm('Delete this session? This cannot be undone.')) return
+    apiFetch('/sessions/delete', {
+      method: 'POST',
+      body: JSON.stringify({ sid }),
+    }).then(() => refreshSessions())
+  }
+
+  // Load persisted feature toggles once on mount.
+  useEffect(() => {
+    apiFetch('/features').then((r) => r.ok && setFeatures((r.data || {})))
+  }, [])
+
+  const toggleFeature = (q) => {
+    const next = !features[q.id]
+    setFeatures((f) => ({ ...f, [q.id]: next }))
+    apiFetch('/features', {
+      method: 'POST',
+      body: JSON.stringify({ name: q.id, enabled: next }),
+    })
+    setToast(`${q.label} ${next ? 'enabled' : 'disabled'}`)
+    setTimeout(() => setToast(''), 1600)
   }
 
   useEffect(() => {
-    if (activePage === 'settings') refreshProviders()
+    if (activePage === 'settings') { refreshProviders(); refreshToolKeys() }
+    if (['memory', 'apps', 'browser', 'research'].includes(activePage)) refreshSessions()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePage])
 
   const voiceOnRef = useRef(voiceOn)
   voiceOnRef.current = voiceOn
 
-  const { messages, coreState, activeTool, status, tools, models, currentModel, selectModel, greet, sendMessage } =
-    useNira('web', {
-      onModelSwitch: (to) => {
-        setToast(`Switched to ${to} (limit reached)`)
-        setTimeout(() => setToast(''), 3500)
-      },
-      onReply: (text) => {
-        if (voiceOnRef.current) speakRef.current(text)
-      },
-    })
+  const nira = useNira('web', {
+    onModelSwitch: (to) => {
+      setToast(`Switched to ${to} (limit reached)`)
+      setTimeout(() => setToast(''), 3500)
+    },
+    onReply: (text) => {
+      // Final transcript received — flush any remaining buffered speech so the
+      // last (possibly punctuation-less) sentence is spoken.
+      enqueueNira('', { stream: true, flush: true })
+    },
+    onText: (chunk) => {
+      if (voiceOnRef.current) enqueueNira(chunk, { stream: true })
+    },
+  })
+
+  const { messages, coreState, activeTool, status, tools, models, currentModel, selectModel, greet, sendMessage } = nira
 
   const { supported: voiceSupported, micActive, startMic, stopMic, speak } = useVoice({
     enabled: voiceOn,
@@ -95,6 +189,13 @@ export default function App() {
     speakNira(`Hello, ${n}. How can I help you today?`)
   }
 
+  const handleQuickAction = (q) => {
+    const preset = q.prompt || ''
+    const input = window.prompt(`${q.label}: describe what you want`, preset)
+    if (input === null) return // cancelled
+    sendWrapped(input.trim() || preset)
+  }
+
   const handleUseTool = (toolId, params) => {
     const toolInfo = tools.find((t) => t.id === toolId)
     const label = toolInfo?.label || toolId
@@ -109,20 +210,32 @@ export default function App() {
     }
   }
 
-  // Wrap sendMessage to flag streaming state.
+  // Wrap sendMessage to flag streaming state. Slash commands bypass the LLM
+  // and run tools directly via /tools/run.
   const [requesting, setRequesting] = useState(false)
   const sendWrapped = (text) => {
+    if (text && text.trim().startsWith('/')) {
+      setStreaming(true)
+      nira.runSlashCommand(text).finally(() => {
+        setTimeout(() => { setStreaming(false); setRequesting(false) }, 800)
+      })
+      return
+    }
     setStreaming(true)
     setRequesting(true)
     sendMessage(text)
-    // Clear streaming + requesting shortly after; the hook appends the reply.
     setTimeout(() => { setStreaming(false); setRequesting(false) }, 1600)
   }
 
-  // Tapping the AI core: if Nira is speaking -> interrupt; otherwise toggle mic.
+  // Close any open drawer (clicking the scrim).
+  const closeDrawers = () => {
+    setNavOpen(false)
+    setActivityOpen(false)
+  }
+
   const onCoreTap = () => {
     if (micActive) { stopMic(); return }
-    if (voiceOn) { stopMic(); return } // interrupt speech
+    if (voiceOn) { stopSpeech(); return } // interrupt speech
     if (voiceSupported) startMic()
   }
 
@@ -138,21 +251,34 @@ export default function App() {
   })()
 
   return (
-    <div className="app">
+    <div className={`app ${navOpen ? 'nav-open' : ''} ${activityOpen ? 'activity-open' : ''} ${activePage === 'about' ? 'app-no-right' : ''}`}>
+      <LoadingScreen visible={loading} />
+      {showGreeting && (
+        <GreetingOverlay name={name} onDone={() => setShowGreeting(false)} />
+      )}
+      {/* Tablet: ⚙ gear only (top-right). Mobile: ☰ (left) + ⚙ gear (right). */}
+      <div className="topbar">
+        <MenuToggle open={navOpen} onClick={() => { setActivityOpen(false); setNavOpen((v) => !v) }} />
+        <div className="brand-sm">NIRA</div>
+        <button className="icon-btn settings-toggle" title="Models & settings" onClick={() => { setNavOpen(false); setActivityOpen((v) => !v) }}>⚙</button>
+      </div>
+
       {showNameModal && <NameModal onSubmit={handleName} />}
       {toast && <div className="toast">{toast}</div>}
+      <div className="scrim" onClick={closeDrawers} />
 
       <LeftSidebar
         coreState={effectiveState}
         activeTool={activeTool}
         userName={name}
         activePage={activePage}
-        onPage={setActivePage}
+        onPage={(p) => { setNavOpen(false); setActivePage(p) }}
         requesting={requesting}
         speaking={voiceOn}
         voiceSupported={voiceSupported}
         micActive={micActive}
         onCoreTap={onCoreTap}
+        onNewChat={handleNewChat}
       />
 
       <div className="column center">
@@ -160,9 +286,27 @@ export default function App() {
           <SettingsPanel
             providers={providersInfo}
             custom={custom}
+            toolKeys={toolKeys}
             onAdd={refreshProviders}
             onRemove={refreshProviders}
+            onToolKey={refreshToolKeys}
           />
+        ) : activePage === 'memory' ? (
+          <MemoryPage
+            sessions={sessions}
+            onResume={handleResume}
+            onRename={handleRename}
+            onDelete={handleDelete}
+            onNewChat={handleNewChat}
+          />
+        ) : activePage === 'apps' ? (
+          <AppsPage onSend={sendWrapped} />
+        ) : activePage === 'browser' ? (
+          <BrowserPage onSend={sendWrapped} />
+        ) : activePage === 'research' ? (
+          <ResearchPage onSend={sendWrapped} />
+        ) : activePage === 'about' ? (
+          <AboutPage onSend={(text) => { setActivePage('chat'); sendWrapped(text) }} />
         ) : (
           <>
             <div className="center-header">
@@ -183,14 +327,23 @@ export default function App() {
         )}
       </div>
 
-      <RightSidebar
-        activity={activity}
-        status={status}
-        coreState={coreState}
-        models={models}
-        currentModel={currentModel}
-        onSelectModel={selectModel}
-      />
+      {activePage !== 'about' && (
+        <RightSidebar
+          activity={activity}
+          status={status}
+          coreState={coreState}
+          models={models}
+          currentModel={currentModel}
+          onSelectModel={selectModel}
+          onQuickAction={handleQuickAction}
+          features={features}
+          onToggleFeature={toggleFeature}
+          voiceOn={voiceOn}
+          voiceSupported={voiceSupported}
+          onToggleVoice={toggleVoice}
+        />
+      )}
+
     </div>
   )
 }

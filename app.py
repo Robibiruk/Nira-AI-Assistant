@@ -27,6 +27,7 @@ from speech.tts import speak_onnx
 from core import runtime
 from core.assistant import Assistant
 from core.memory import Memory
+from core import router as tool_router
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -80,6 +81,53 @@ class CustomName(BaseModel):
     name: str
 
 
+class ToolKey(BaseModel):
+    """An external-tool API key (Google, GitHub, Spotify, ...)."""
+    name: str
+    api_key: str = ""
+    extra: dict = {}
+
+
+class FeatureState(BaseModel):
+    """Enable/disable a Quick-Action feature (persisted locally)."""
+    name: str
+    enabled: bool = True
+
+
+class SessionRename(BaseModel):
+    sid: str
+    title: str
+
+
+class SessionDelete(BaseModel):
+    sid: str
+
+
+class ToolRunRequest(BaseModel):
+    """Run a registered tool directly (no LLM involved)."""
+    name: str
+    arguments: dict = {}
+
+def tool_keys_path() -> Path:
+    return BASE_DIR / "config" / "tool_keys.json"
+
+
+def _load_tool_keys() -> dict:
+    p = tool_keys_path()
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) or {}
+    except (ValueError, OSError):
+        return {}
+
+
+def _save_tool_keys(d: dict) -> None:
+    p = tool_keys_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(d, indent=2), encoding="utf-8")
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -89,9 +137,21 @@ def health() -> dict:
 def models(refresh: bool = False) -> dict:
     """List free, tool-capable models (scoped id/name/context_length) for the UI."""
     free = runtime.free_models(refresh=refresh)
+    # De-duplicate by id — provider/model ids are already globally scoped as
+    # "provider|model", so id alone is the correct uniqueness key. Jan's
+    # /v1/models can otherwise return the same id with a differing provider
+    # field, which a (provider, id) key would fail to collapse.
+    seen = set()
+    deduped = []
+    for m in free:
+        mid = m.get("id")
+        if not mid or mid in seen:
+            continue
+        seen.add(mid)
+        deduped.append(m)
     # Group by provider for a cleaner dropdown.
-    providers = sorted({m.get("provider") for m in free if m.get("provider")})
-    return {"current": runtime.get_model(), "models": free, "providers": providers}
+    providers = sorted({m.get("provider") for m in deduped if m.get("provider")})
+    return {"current": runtime.get_model(), "models": deduped, "providers": providers}
 
 
 @app.post("/models/select")
@@ -160,11 +220,143 @@ def delete_custom(req: "CustomName") -> dict:
     """Remove a custom provider by name."""
     from ai.providers import _load_custom, save_custom
 
-    name = (req.name or "").strip()
+    name = req.name or ""
     items = [c for c in _load_custom() if c.get("name") != name]
     save_custom(items)
     runtime.rebuild_providers()
     return {"ok": True, "removed": name}
+
+
+@app.get("/tools/keys")
+def list_tool_keys() -> dict:
+    """List configured external-tool keys (values masked for safety)."""
+    d = _load_tool_keys()
+    out = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            has = bool((v.get("api_key") or "").strip())
+            out[k] = {
+                "configured": has,
+                "extra": v.get("extra", {}),
+            }
+        else:
+            out[k] = {"configured": bool(str(v).strip()), "extra": {}}
+    return {"keys": out}
+
+
+@app.post("/tools/keys")
+def set_tool_key(req: "ToolKey") -> dict:
+    """Save (or replace) an external-tool API key. Persisted to
+    config/tool_keys.json (gitignored)."""
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    d = _load_tool_keys()
+    # Preserve extra fields for keys that need more than a single token.
+    prev = d.get(name, {}) if isinstance(d.get(name), dict) else {}
+    d[name] = {
+        "api_key": (req.api_key or "").strip(),
+        "extra": {**prev.get("extra", {}), **(req.extra or {})},
+    }
+    _save_tool_keys(d)
+    return {"ok": True, "name": name, "configured": bool(d[name]["api_key"])}
+
+
+@app.delete("/tools/keys")
+def delete_tool_key(req: "CustomName") -> dict:
+    """Remove an external-tool API key by name."""
+    name = req.name.strip()
+    d = _load_tool_keys()
+    if name in d:
+        del d[name]
+        _save_tool_keys(d)
+    return {"ok": True, "removed": name}
+
+
+def features_path() -> Path:
+    return BASE_DIR / "config" / "features.json"
+
+
+def _load_features() -> dict:
+    p = features_path()
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) or {}
+    except (ValueError, OSError):
+        return {}
+
+
+def _save_features(d: dict) -> None:
+    p = features_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(d, indent=2), encoding="utf-8")
+
+
+@app.get("/features")
+def get_features() -> dict:
+    """Return the set of enabled Quick-Action features."""
+    return _load_features()
+
+
+@app.post("/features")
+def set_feature(req: "FeatureState") -> dict:
+    """Enable/disable a Quick-Action feature (persisted locally)."""
+    name = (req.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    d = _load_features()
+    d[name] = bool(req.enabled)
+    _save_features(d)
+    return {"ok": True, "name": name, "enabled": d[name]}
+
+
+@app.get("/sessions")
+def list_sessions() -> dict:
+    """List saved chat sessions (newest first), each with its auto title."""
+    return {"sessions": Memory().list_sessions()}
+
+
+@app.get("/sessions/{sid}")
+def get_session(sid: str) -> dict:
+    """Return a session's full message history (for resume)."""
+    return {"sid": sid, "messages": Memory().get_history(sid, limit=200)}
+
+
+@app.post("/sessions/rename")
+def rename_session(req: "SessionRename") -> dict:
+    if not req.sid:
+        raise HTTPException(status_code=400, detail="sid is required")
+    Memory().rename_session(req.sid, req.title)
+    return {"ok": True, "sid": req.sid, "title": req.title}
+
+
+@app.post("/sessions/delete")
+def delete_session(req: "SessionDelete") -> dict:
+    if not req.sid:
+        raise HTTPException(status_code=400, detail="sid is required")
+    Memory().delete_session(req.sid)
+    return {"ok": True, "removed": req.sid}
+
+
+@app.post("/tools/run")
+def run_tool(req: "ToolRunRequest") -> dict:
+    """Execute a registered tool DIRECTLY, without an LLM.
+
+    This is the model-independent execution path: slash commands and the
+    command menu call this so tasks still run even when the chosen model is
+    down, rate-limited, or too weak to call tools itself.
+    """
+    name = (req.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="tool name is required")
+    if name not in tool_router.REGISTRY:
+        raise HTTPException(status_code=404, detail=f"unknown tool: {name}")
+    result = tool_router.execute(name, req.arguments or {})
+    return {"ok": True, "tool": name, "result": result}
+
+
+@app.get("/status")
 def status() -> dict:
     """Provider/model capability snapshot for diagnostics (no network)."""
     providers = runtime.providers()
@@ -173,6 +365,85 @@ def status() -> dict:
         "providers": [p.name for p in providers],
         "free_model_count": len(runtime.free_models(refresh=False)),
     }
+
+
+@app.get("/desktop")
+def desktop() -> dict:
+    """Live desktop snapshot: installed apps, open windows, running apps, and
+    browser tabs.
+
+    Uses the Windows system-enumeration tools (pywin32/psutil). Returns
+    structured lists so the UI can render them and let NIRA act on them —
+    a reliable "desktop awareness" view that doesn't depend on screen capture.
+    """
+    import platform as _platform
+
+    from tools.windows import list_installed_apps, list_windows, list_open_apps, list_chrome_tabs
+
+    plat = _platform.system().lower()
+    if plat == "darwin":
+        device = "macos"
+    elif plat == "linux":
+        device = "linux"
+    elif plat == "windows":
+        device = "windows"
+    else:
+        device = plat or "unknown"
+
+    return {
+        "ok": True,
+        "platform": device,
+        "installed": list_installed_apps(),
+        "windows": list_windows(),
+        "apps": list_open_apps(),
+        "tabs": list_chrome_tabs(),
+    }
+
+
+class DesktopActionRequest(BaseModel):
+    action: str  # "focus" | "close"
+    kind: str  # "window" | "tab"
+    title: str = ""
+    exe: str = ""
+    query: str = ""
+
+
+@app.post("/desktop/action")
+def desktop_action(req: DesktopActionRequest) -> dict:
+    """Focus, close, or open a window / tab / installed app."""
+    from tools.windows import (
+        focus_window,
+        close_window,
+        focus_browser_tab,
+        close_browser_tab,
+        open_installed_app,
+    )
+
+    a = (req.action or "").lower()
+    k = (req.kind or "").lower()
+    if k == "installed":
+        if a == "open":
+            msg = open_installed_app(req.title)
+        else:
+            raise HTTPException(status_code=400, detail="unknown action")
+    elif k == "window":
+        if a == "focus":
+            msg = focus_window(req.title, req.exe)
+        elif a == "close":
+            msg = close_window(req.title, req.exe)
+        else:
+            raise HTTPException(status_code=400, detail="unknown action")
+    elif k == "tab":
+        q = req.query or req.title
+        if a == "focus":
+            msg = focus_browser_tab(q)
+        elif a == "close":
+            msg = close_browser_tab(q)
+        else:
+            raise HTTPException(status_code=400, detail="unknown action")
+    else:
+        raise HTTPException(status_code=400, detail="unknown kind")
+    return {"ok": True, "message": msg}
 
 
 @app.post("/prefs/name")
@@ -245,6 +516,11 @@ async def chat_stream(req: ChatRequest):
 
     return StreamingResponse(event_source(), media_type="text/event-stream")
 
+
+# Serve extracted app icons statically (generated at runtime into ui/public/icons).
+_icons = BASE_DIR / "ui" / "public" / "icons"
+if _icons.is_dir():
+    app.mount("/icons", StaticFiles(directory=str(_icons)), name="icons")
 
 # Serve the built React UI (run `npm run build` in ui/) if it is present.
 _dist = BASE_DIR / "ui" / "dist"

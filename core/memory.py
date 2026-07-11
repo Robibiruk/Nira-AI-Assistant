@@ -52,6 +52,16 @@ class Memory:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sessions (
+                    sid    TEXT PRIMARY KEY,
+                    title  TEXT NOT NULL,
+                    created TEXT NOT NULL,
+                    updated TEXT NOT NULL
+                )
+                """
+            )
 
     # --- conversation history -------------------------------------------------
 
@@ -90,3 +100,49 @@ class Memory:
         with self._conn() as conn:
             row = conn.execute("SELECT value FROM prefs WHERE key = ?", (key,)).fetchone()
         return row[0] if row else default
+
+    # --- sessions --------------------------------------------------------------
+
+    def ensure_session(self, sid: str, title: str | None = None) -> None:
+        """Create a session row if absent. Title defaults to 'New chat'."""
+        with self._conn() as conn:
+            row = conn.execute("SELECT sid FROM sessions WHERE sid = ?", (sid,)).fetchone()
+            if not row:
+                now = _now()
+                conn.execute(
+                    "INSERT INTO sessions (sid, title, created, updated) VALUES (?, ?, ?, ?)",
+                    (sid, title or "New chat", now, now),
+                )
+
+    def touch_session(self, sid: str, title: str | None = None) -> None:
+        """Update a session's last-active time (and title if given)."""
+        with self._conn() as conn:
+            if title is not None:
+                conn.execute(
+                    "UPDATE sessions SET title = ?, updated = ? WHERE sid = ?",
+                    (title, _now(), sid),
+                )
+            else:
+                conn.execute("UPDATE sessions SET updated = ? WHERE sid = ?", (_now(), sid))
+
+    def rename_session(self, sid: str, title: str) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE sessions SET title = ? WHERE sid = ?",
+                (title.strip()[:120] or "New chat", sid),
+            )
+
+    def delete_session(self, sid: str) -> None:
+        with self._conn() as conn:
+            conn.execute("DELETE FROM sessions WHERE sid = ?", (sid,))
+            conn.execute("DELETE FROM conversations WHERE session = ?", (sid,))
+
+    def list_sessions(self) -> list[dict[str, str]]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT sid, title, created, updated FROM sessions ORDER BY updated DESC"
+            ).fetchall()
+        return [
+            {"sid": r[0], "title": r[1], "created": r[2], "updated": r[3]}
+            for r in rows
+        ]

@@ -17,8 +17,21 @@ from tools.apps import app_tool
 from tools.browser import browser_tool
 from tools.calculator import calculator_tool
 from tools.terminal import terminal_tool
-from tools.windows import apps_tool, tabs_tool, windows_tool
+from tools.windows import (
+    apps_tool,
+    tabs_tool,
+    windows_tool,
+    installed_apps_tool,
+    focus_window_tool,
+    close_window_tool,
+    focus_tab_tool,
+    close_tab_tool,
+)
 from tools.weather import weather_tool
+from tools.translate import translate_tool
+from tools.wikipedia import wikipedia_tool
+from tools.spotify import spotify_tool
+from tools.screenshot import screenshot_tool
 
 # ---- Search tools ----
 from tools.search_arxiv import arxiv_search_tool
@@ -31,6 +44,7 @@ from tools.search_stackoverflow import stackoverflow_search_tool
 from tools.search_social import social_search_tool
 from tools.search_web import web_search_tool
 from tools.search_youtube import youtube_search_tool
+from tools.tavily_search import tavily_search_tool
 
 ALL_TOOLS = [
     # Core system tools
@@ -40,10 +54,19 @@ ALL_TOOLS = [
     app_tool,
     calculator_tool,
     weather_tool,
+    translate_tool,
+    wikipedia_tool,
+    spotify_tool,
+    screenshot_tool,
     # Windows system
     windows_tool,
     apps_tool,
     tabs_tool,
+    installed_apps_tool,
+    focus_window_tool,
+    close_window_tool,
+    focus_tab_tool,
+    close_tab_tool,
     # Search ecosystem
     web_search_tool,
     news_search_tool,
@@ -55,6 +78,7 @@ ALL_TOOLS = [
     hackernews_search_tool,
     stackoverflow_search_tool,
     social_search_tool,
+    tavily_search_tool,
 ]
 REGISTRY = {tool.name: tool for tool in ALL_TOOLS}
 

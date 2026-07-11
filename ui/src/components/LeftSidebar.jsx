@@ -1,12 +1,18 @@
-import AICore from './AICore'
+import LottieBox from './LottieBox'
+
+const SIDEBAR_LOTTIE = '/lottie/Zif7GWYROj.lottie'
+
+// Robot mark for the sidebar core (default + hover variants from Favicon/).
+const CORE_ICON = '/favicon-96.png'
+const CORE_ICON_HOVER = '/favicon-70.png'
 
 const NAV = [
   { id: 'chat', label: 'Chat', icon: '💬' },
-  { id: 'tools', label: 'Tools', icon: '⚙' },
   { id: 'memory', label: 'Memory', icon: '🧠' },
-  { id: 'files', label: 'Files', icon: '📂' },
+  { id: 'apps', label: 'Apps', icon: '📦' },
   { id: 'browser', label: 'Browser', icon: '🌐' },
   { id: 'research', label: 'Research', icon: '🔬' },
+  { id: 'about', label: 'About', icon: 'ℹ' },
   { id: 'settings', label: 'Settings', icon: '⚙' },
 ]
 
@@ -28,20 +34,21 @@ export default function LeftSidebar({
   speaking,
   voiceSupported,
   onCoreTap,
+  onNewChat,
 }) {
   return (
     <div className="column left">
       <div className="panel" style={{ alignItems: 'center', gap: 8, flex: '0 0 auto', minHeight: 0 }}>
-        <AICore
-          state={coreState}
-          activeTool={activeTool}
-          requesting={requesting}
-          micActive={micActive}
-          speaking={speaking}
-          voiceSupported={voiceSupported}
-          onTap={onCoreTap}
-        />
+        <button
+          className="sidebar-core"
+          title={voiceSupported ? (micActive ? 'Tap to stop' : speaking ? 'Tap to interrupt' : 'Tap to talk') : 'Voice not available in this browser'}
+          onClick={onCoreTap}
+        >
+          <img className="sidebar-core-icon" src={CORE_ICON} alt="NIRA" />
+          <img className="sidebar-core-icon sidebar-core-icon-hover" src={CORE_ICON_HOVER} alt="NIRA" />
+        </button>
         <h1 className="brand">NIRA</h1>
+        <LottieBox src={SIDEBAR_LOTTIE} className="sidebar-lottie" />
         <div className="sidebar-greeting">
           Good {greetingPart()}, <b>{userName || 'there'}</b>.
         </div>
@@ -57,7 +64,10 @@ export default function LeftSidebar({
       </div>
 
       <div className="panel" style={{ flex: '1 1 auto', minHeight: 0 }}>
-        <div className="panel-title">Navigation</div>
+        <div className="panel-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          Navigation
+          <button className="nav-new" title="Start a new chat" onClick={onNewChat}>＋</button>
+        </div>
         <nav className="nav">
           {NAV.map((n) => (
             <button
@@ -70,15 +80,6 @@ export default function LeftSidebar({
             </button>
           ))}
         </nav>
-      </div>
-
-      <div className="user-card">
-        <div className="avatar">{(userName || 'U').slice(0, 1).toUpperCase()}</div>
-        <div className="user-meta">
-          <div className="user-name">{userName || 'Guest'}</div>
-          <div className="user-sub">Free plan</div>
-        </div>
-        <button className="user-menu" title="Settings" onClick={() => onPage?.('settings')}>⋮</button>
       </div>
     </div>
   )

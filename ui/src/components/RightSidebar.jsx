@@ -1,16 +1,28 @@
+// Quick Actions are FEATURE TOGGLES. Tapping enables/disables a capability;
+// when enabled, NIRA prefers that tool (e.g. Calculator -> numpy, Translate ->
+// DeepL) instead of answering from the model itself.
+import { useState } from 'react'
+import LottieBox from './LottieBox'
+
+const GEAR_LOTTIE = '/lottie/ol4LVUnk08.lottie'
+
 const QUICK = [
-  { id: 'screenshot', label: 'Screenshot', icon: '📸' },
-  { id: 'code', label: 'Code', icon: '⟨⟩' },
-  { id: 'notes', label: 'Notes', icon: '📝' },
-  { id: 'calculator', label: 'Calculator', icon: '🧮' },
-  { id: 'translate', label: 'Translate', icon: '🌐' },
-  { id: 'weather', label: 'Weather', icon: '🌤' },
-  { id: 'github', label: 'GitHub', icon: '🐙' },
-  { id: 'clipboard', label: 'Clipboard', icon: '📋' },
-  { id: 'camera', label: 'Camera', icon: '📷' },
-  { id: 'email', label: 'Email', icon: '✉' },
-  { id: 'calendar', label: 'Calendar', icon: '📅' },
-  { id: 'chat', label: 'Chat', icon: '💬' },
+  { id: 'calculator', label: 'Calculator', icon: '🧮', tool: 'calculate' },
+  { id: 'translate', label: 'Translate', icon: '🌐', tool: 'translate' },
+  { id: 'weather', label: 'Weather', icon: '🌤', tool: 'get_weather' },
+  { id: 'wikipedia', label: 'Wikipedia', icon: '📚', tool: 'wikipedia' },
+  { id: 'youtube', label: 'YouTube', icon: '▶️', tool: 'youtube_search' },
+  { id: 'spotify', label: 'Spotify', icon: '🎧', tool: 'spotify' },
+  { id: 'google', label: 'Google', icon: '🔎', tool: 'web_search' },
+  { id: 'github', label: 'GitHub', icon: '🐙', tool: 'github_search' },
+  { id: 'arxiv', label: 'arXiv', icon: '📄', tool: 'arxiv_search' },
+  { id: 'pubmed', label: 'PubMed', icon: '🧬', tool: 'pubmed_search' },
+  { id: 'reddit', label: 'Reddit', icon: '👽', tool: 'reddit_search' },
+  { id: 'x', label: 'X', icon: '𝕏', tool: 'social_search' },
+  { id: 'browser', label: 'Browser', icon: '🧭', tool: 'browser' },
+  { id: 'screenshot', label: 'Screenshot', icon: '📸', tool: 'take_screenshot' },
+  { id: 'calendar', label: 'Calendar', icon: '📅', tool: 'calendar' },
+  { id: 'gmail', label: 'Gmail', icon: '✉️', tool: 'gmail' },
 ]
 
 function nowTime() {
@@ -29,17 +41,41 @@ export default function RightSidebar({
   models,
   currentModel,
   onSelectModel,
+  onQuickAction,
+  features = {},
+  onToggleFeature,
+  voiceOn,
+  voiceSupported,
+  onToggleVoice,
 }) {
-  const voiceOn = status?.voice && status.voice !== 'Off'
   const rows = [
     { k: 'Model', v: currentModel ? shortModel(currentModel) : '—', ind: 'ok' },
     { k: 'Latency', v: status?.latency || '—', ind: status?.latency ? 'ok' : 'warn' },
     { k: 'Memory', v: status?.memory || '—', ind: 'ok' },
-    { k: 'Voice', v: status?.voice || 'Off', ind: voiceOn ? 'ok' : 'warn' },
     { k: 'Internet', v: 'Online', ind: 'ok' },
     { k: 'Tools Online', v: '12', ind: 'ok' },
     { k: 'API Usage', v: '3 / day', ind: 'warn' },
   ]
+
+  const voiceLabel = !voiceSupported ? 'Unsupported' : voiceOn ? 'On' : 'Off'
+
+  const enabledCount = QUICK.filter((q) => features[q.id]).length
+
+  // Searchable model picker state.
+  const [modelOpen, setModelOpen] = useState(false)
+  const [modelQuery, setModelQuery] = useState('')
+  const filteredModels = (models || []).filter((m) => {
+    const name = (m.name || '').toLowerCase()
+    const tokens = modelQuery.toLowerCase().trim().split(/\s+/).filter(Boolean)
+    // Every typed word must appear as a substring (in any order/position).
+    return tokens.every((t) => name.includes(t))
+  })
+
+  const chooseModel = (id) => {
+    onSelectModel?.(id)
+    setModelOpen(false)
+    setModelQuery('')
+  }
 
   return (
     <div className="column right">
@@ -64,22 +100,49 @@ export default function RightSidebar({
       </div>
 
       <div className="panel" style={{ flex: '0 0 auto' }}>
-        <div className="panel-title">System Status</div>
+        <div className="panel-title">
+          <span className="panel-title-row">
+            <LottieBox src={GEAR_LOTTIE} className="gear-lottie" />
+            System Status
+          </span>
+        </div>
         <div className="status-rows">
-          <div className="status-row">
+          <div className="status-row model-row">
             <span className="status-key">Model</span>
-            <select
-              className="model-select"
-              value={currentModel}
-              onChange={(e) => onSelectModel?.(e.target.value)}
+            <button
+              className="model-select-btn"
+              onClick={() => setModelOpen((v) => !v)}
               disabled={!models?.length}
-              aria-label="Select model"
+              title="Search models"
             >
-              {!models?.length && <option value={currentModel || ''}>loading…</option>}
-              {models?.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
+              <span className="model-current">{currentModel ? shortModel(currentModel) : 'loading…'}</span>
+              <span className="model-caret">🔍</span>
+            </button>
+            {modelOpen && (
+              <div className="model-pop">
+                <input
+                  className="model-search"
+                  autoFocus
+                  placeholder="Search models…"
+                  value={modelQuery}
+                  onChange={(e) => setModelQuery(e.target.value)}
+                />
+                <div className="model-list">
+                  {filteredModels.length === 0 && (
+                    <div className="model-empty">No matches</div>
+                  )}
+                  {filteredModels.map((m) => (
+                    <button
+                      key={m.id}
+                      className={`model-opt ${m.id === currentModel ? 'active' : ''}`}
+                      onClick={() => chooseModel(m.id)}
+                    >
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           {rows.slice(1).map((r) => (
             <div className="status-row" key={r.k}>
@@ -90,18 +153,42 @@ export default function RightSidebar({
               </span>
             </div>
           ))}
+          <div className="status-row">
+            <span className="status-key">Voice</span>
+            <button
+              className={`voice-toggle ${voiceOn ? 'on' : ''}`}
+              onClick={onToggleVoice}
+              disabled={!voiceSupported}
+              title={voiceSupported ? 'Toggle voice chat' : 'Web Speech not supported in this browser'}
+            >
+              {voiceLabel}
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="panel" style={{ flex: '0 0 auto' }}>
-        <div className="panel-title">Quick Actions</div>
+        <div className="panel-title">
+          Features <span style={{ opacity: 0.6, fontWeight: 400, fontSize: 12 }}>· {enabledCount} on</span>
+        </div>
+        <div className="quick-hint">Tap to enable a tool. When on, NIRA uses it directly (e.g. Calculator → Python, Translate → DeepL).</div>
         <div className="quick-grid">
-          {QUICK.map((q) => (
-            <button key={q.id} className="quick-btn" title={q.label}>
-              <span className="q-icon">{q.icon}</span>
-              {q.label}
-            </button>
-          ))}
+          {QUICK.map((q) => {
+            const on = !!features[q.id]
+            return (
+              <button
+                key={q.id}
+                className={`quick-btn ${on ? 'on' : ''}`}
+                title={`${q.label} — ${on ? 'enabled (tap to disable)' : 'disabled (tap to enable)'}`}
+                aria-pressed={on}
+                onClick={() => onToggleFeature?.(q)}
+              >
+                <span className="q-icon">{q.icon}</span>
+                {q.label}
+                <span className={`q-dot ${on ? 'on' : ''}`} />
+              </button>
+            )
+          })}
         </div>
       </div>
     </div>

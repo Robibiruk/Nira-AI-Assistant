@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+import json
 
 from loguru import logger
 
@@ -52,6 +53,39 @@ def list_free_openrouter_models(timeout: float = 20.0) -> list[dict[str, Any]]:
                 "context_length": m.get("context_length"),
             }
         )
+    out.sort(key=lambda x: (x["name"] or "").lower())
+    return out
+
+
+def list_openai_compatible_models(base_url: str, api_key: str | None = None,
+                                  timeout: float = 8.0) -> list[dict[str, Any]]:
+    """List models from any OpenAI-compatible ``/v1/models`` endpoint.
+
+    Works for local runtimes (Jan, Ollama, LM Studio, vLLM) and cloud
+    providers. Returns [{id, name, context_length}] or [] on failure.
+    """
+    url = base_url.rstrip("/") + "/models"
+    headers = {"User-Agent": "NIRA"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.get(url, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+    except (httpx.HTTPError, ValueError):
+        return []
+    items = data.get("data", data) if isinstance(data, dict) else data
+    out: list[dict[str, Any]] = []
+    for m in items or []:
+        mid = m.get("id") if isinstance(m, dict) else str(m)
+        if not mid:
+            continue
+        out.append({
+            "id": mid,
+            "name": mid,
+            "context_length": (m.get("context_length") if isinstance(m, dict) else None),
+        })
     out.sort(key=lambda x: (x["name"] or "").lower())
     return out
 
@@ -175,3 +209,62 @@ class MultiProviderClient:
             "content": msg.get("content") or "",
             "tool_calls": msg.get("tool_calls") or [],
         }
+
+    def chat_stream(self, messages: list[dict[str, Any]], tools: list[dict] | None = None):
+        """Yield incremental content deltas (str) as the model streams.
+
+        Uses the provider's OpenAI-compatible SSE endpoint. Yields plain ``str``
+        chunks for text. If the model emits tool calls, yields the dict
+        ``{"_toolcall": True}`` as a signal so the caller can fall back to the
+        non-streaming chat() for that step (tool parsing needs the full,
+        structured response).
+        """
+        if not self.providers:
+            raise ProviderError("No LLM providers configured.")
+        p, mid = self._resolve(self.model)
+        payload: dict[str, Any] = {
+            "model": mid,
+            "messages": messages,
+            "temperature": self.temperature,
+            "stream": True,
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+
+        url = p.base_url.rstrip("/") + "/chat/completions"
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                with client.stream("POST", url, json=payload, headers=p.headers()) as resp:
+                    if resp.status_code != 200:
+                        raise ProviderError(
+                            f"{p.name} {resp.status_code}: {(resp.read()).decode()[:300]}",
+                            status_code=resp.status_code,
+                            provider=p.name,
+                        )
+                    saw_toolcall = False
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        if line.startswith("data:"):
+                            chunk = line[5:].strip()
+                            if chunk == "[DONE]":
+                                break
+                            try:
+                                data = json.loads(chunk)
+                            except ValueError:
+                                continue
+                            choices = data.get("choices") or []
+                            if not choices:
+                                continue
+                            delta = choices[0].get("delta") or {}
+                            if delta.get("tool_calls"):
+                                if not saw_toolcall:
+                                    saw_toolcall = True
+                                    yield {"_toolcall": True}
+                                continue
+                            piece = delta.get("content") or ""
+                            if piece:
+                                yield piece
+        except httpx.HTTPError as exc:
+            raise ProviderError(f"Network error ({p.name}): {exc}", provider=p.name) from exc

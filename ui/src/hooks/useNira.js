@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { apiFetch } from '../api'
+import { SLASH_COMMANDS, parseSlash } from '../slash'
 
 // Tool catalogue shown in the side panel. `id` must match the tool name the
 // backend reports in tool_result/executing events so the active highlight works.
@@ -23,7 +25,7 @@ const TOOLS = [
 ]
 
 export function useNira(sessionId = 'web', options = {}) {
-  const { onModelSwitch, onReply } = options
+  const { onModelSwitch, onReply, onText } = options
   const [messages, setMessages] = useState([])
   const [coreState, setCoreState] = useState('idle')
   const [activeTool, setActiveTool] = useState(null)
@@ -36,34 +38,45 @@ export function useNira(sessionId = 'web', options = {}) {
   const [models, setModels] = useState([])
   const [currentModel, setCurrentModel] = useState('')
 
+  // Session id is mutable so resuming a past session doesn't recreate the hook.
+  const sessionIdRef = useRef(sessionId)
   const startRef = useRef(0)
   const onModelSwitchRef = useRef(onModelSwitch)
   const onReplyRef = useRef(onReply)
+  const onTextRef = useRef(onText)
   onModelSwitchRef.current = onModelSwitch
   onReplyRef.current = onReply
+  onTextRef.current = onText
+
+  const setSessionId = useCallback((id) => {
+    sessionIdRef.current = id
+  }, [])
 
   // Load the free model list + current selection on mount.
   useEffect(() => {
-    fetch('/models')
-      .then((r) => r.json())
-      .then((d) => {
-        setModels(d.models || [])
-        if (d.current) setCurrentModel(d.current)
+    apiFetch('/models').then((r) => {
+      if (!r.ok || !r.data) return
+      // De-duplicate by id (defense-in-depth against backend repeats).
+      const seen = new Set()
+      const unique = (r.data.models || []).filter((m) => {
+        if (!m || !m.id || seen.has(m.id)) return false
+        seen.add(m.id)
+        return true
       })
-      .catch(() => {})
+      setModels(unique)
+      if (r.data.current) setCurrentModel(r.data.current)
+    })
   }, [])
 
   const selectModel = useCallback(async (id) => {
     try {
-      const res = await fetch('/models/select', {
+      const r = await apiFetch('/models/select', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: id }),
       })
-      if (res.ok) {
-        const d = await res.json()
-        setCurrentModel(d.current)
-        setStatus((s) => ({ ...s, model: d.current }))
+      if (r.ok && r.data) {
+        setCurrentModel(r.data.current)
+        setStatus((s) => ({ ...s, model: r.data.current }))
       }
     } catch {
       /* ignore */
@@ -72,6 +85,11 @@ export function useNira(sessionId = 'web', options = {}) {
 
   const greet = useCallback((name) => {
     setMessages([{ role: 'assistant', content: `Hello, ${name}! How can I help you today?` }])
+  }, [])
+
+  // Replace current messages with a saved session's history (for resume).
+  const loadMessages = useCallback((msgs) => {
+    setMessages(msgs || [])
   }, [])
 
   const sendMessage = useCallback(
@@ -108,6 +126,24 @@ export function useNira(sessionId = 'web', options = {}) {
               setStatus((s) => ({ ...s, latency: `${(ms / 1000).toFixed(1)} s` }))
             }
             break
+          case 'text':
+            // Incremental token chunk — append to the streaming assistant
+            // message and hand it to the voice layer for sentence TTS.
+            setMessages((m) => {
+              const copy = m.slice()
+              const last = copy[copy.length - 1]
+              if (last && last.role === 'assistant' && last.streaming) {
+                copy[copy.length - 1] = {
+                  ...last,
+                  content: (last.content || '') + ev.content,
+                }
+              } else {
+                copy.push({ role: 'assistant', content: ev.content, streaming: true })
+              }
+              return copy
+            })
+            onTextRef.current?.(ev.content)
+            break
           case 'tool_result':
             setMessages((m) => [
               ...m,
@@ -115,7 +151,21 @@ export function useNira(sessionId = 'web', options = {}) {
             ])
             break
           case 'message':
-            setMessages((m) => [...m, { role: 'assistant', content: ev.content }])
+            // Final full message (also covers non-streaming replies).
+            setMessages((m) => {
+              const copy = m.slice()
+              const last = copy[copy.length - 1]
+              if (last && last.role === 'assistant' && last.streaming) {
+                copy[copy.length - 1] = {
+                  ...last,
+                  content: ev.content,
+                  streaming: false,
+                }
+              } else {
+                copy.push({ role: 'assistant', content: ev.content })
+              }
+              return copy
+            })
             onReplyRef.current?.(ev.content)
             break
           case 'error':
@@ -126,7 +176,6 @@ export function useNira(sessionId = 'web', options = {}) {
             ])
             break
           default:
-            break
         }
       }
 
@@ -134,7 +183,7 @@ export function useNira(sessionId = 'web', options = {}) {
         const res = await fetch('/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: content, session_id: sessionId }),
+          body: JSON.stringify({ message: content, session_id: sessionIdRef.current }),
         })
         if (!res.ok || !res.body) {
           setCoreState('error')
@@ -178,6 +227,58 @@ export function useNira(sessionId = 'web', options = {}) {
     [sessionId],
   )
 
+  // Slash command runner — model-independent. Calls POST /tools/run directly.
+  const runSlashCommand = useCallback(async (text) => {
+    const content = text.trim()
+    const parsed = parseSlash(content)
+    if (!parsed) return false
+    if (parsed.unknown) {
+      setMessages((m) => [
+        ...m,
+        { role: 'user', content },
+        { role: 'assistant', content: `Unknown command: /${parsed.unknown}. Type / to see available commands.` },
+      ])
+      return true
+    }
+    if (parsed.command === 'help') {
+      const list = SLASH_COMMANDS.map((c) => `• /${c.cmd} — ${c.label}`).join('\n')
+      setMessages((m) => [
+        ...m,
+        { role: 'user', content },
+        { role: 'assistant', content: `Available commands:\n${list}` },
+      ])
+      return true
+    }
+
+    const { def, rest } = parsed
+    if (!def || typeof def.arg !== 'function') {
+      setMessages((m) => [
+        ...m,
+        { role: 'user', content },
+        { role: 'assistant', content: `Unknown command. Type / to see available commands.` },
+      ])
+      return true
+    }
+    const args = def.arg(rest || '')
+    setMessages((m) => [...m, { role: 'user', content }])
+    setCoreState('executing')
+    setActiveTool(def.tool)
+    try {
+      const r = await apiFetch('/tools/run', {
+        method: 'POST',
+        body: JSON.stringify({ name: def.tool, arguments: args }),
+      })
+      const result = r.ok && r.data ? r.data.result : `Error: ${r.status || 'request failed'}`
+      setMessages((m) => [...m, { role: 'tool', tool: def.tool, content: result }])
+    } catch (e) {
+      setMessages((m) => [...m, { role: 'tool', tool: def.tool, content: `Error: ${e.message}` }])
+    } finally {
+      setActiveTool(null)
+      setCoreState('idle')
+    }
+    return true
+  }, [])
+
   return {
     messages,
     coreState,
@@ -189,5 +290,8 @@ export function useNira(sessionId = 'web', options = {}) {
     selectModel,
     greet,
     sendMessage,
+    runSlashCommand,
+    setSessionId,
+    loadMessages,
   }
 }

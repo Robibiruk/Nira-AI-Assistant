@@ -26,19 +26,65 @@ from core.router import execute, get_schemas
 
 MAX_TOOL_STEPS = 5
 
+# Map Quick-Action feature ids -> the tool the model should prefer.
+_FEATURE_TOOLS = {
+    "calculator": "calculate (exact math via Python — never compute by hand)",
+    "translate": "translate (DeepL/Google — never translate by hand)",
+    "weather": "get_weather",
+    "wikipedia": "wikipedia",
+    "youtube": "youtube_search",
+    "spotify": "spotify",
+    "google": "web_search",
+    "github": "github_search",
+    "arxiv": "arxiv_search",
+    "pubmed": "pubmed_search",
+    "reddit": "reddit_search",
+    "x": "social_search",
+    "browser": "tavily_search (live web search — use for current info/questions)",
+    "screenshot": "take_screenshot",
+}
+
+
+def _enabled_feature_prompt() -> str:
+    """Build a system hint listing user-enabled feature tools, if any."""
+    import json
+    from pathlib import Path
+
+    p = Path(__file__).resolve().parent.parent / "config" / "features.json"
+    try:
+        data = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    except (ValueError, OSError):
+        return ""
+    on = [_FEATURE_TOOLS[k] for k, v in data.items() if v and k in _FEATURE_TOOLS]
+    if not on:
+        return ""
+    return (
+        "The user has enabled these tools — strongly prefer calling them "
+        "instead of answering from your own knowledge: " + "; ".join(on) + "."
+    )
+
 
 class Assistant:
     def __init__(self, session_id: str = "default") -> None:
         self.session_id = session_id
         self.memory = Memory()
+        self.memory.ensure_session(session_id)
         self.client = MultiProviderClient(
             runtime.providers(), runtime.get_model(), TEMPERATURE
         )
+
+    def _auto_title(self, user_text: str) -> str:
+        """Derive a concise session title from the first user message."""
+        t = user_text.strip().replace("\n", " ")
+        return (t[:80] + "…") if len(t) > 80 else t or "New chat"
 
     def _build_messages(self, user_text: str) -> list[dict[str, Any]]:
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": SYSTEM_PROMPT}
         ]
+        enabled = _enabled_feature_prompt()
+        if enabled:
+            messages.append({"role": "system", "content": enabled})
         name = self.memory.get_pref("name")
         if name:
             messages.append(
@@ -51,6 +97,10 @@ class Assistant:
     def ask(self, user_text: str) -> str:
         try:
             self.memory.save_message(self.session_id, "user", user_text)
+            # Auto-title the session from its first user message only.
+            if len(self.memory.get_history(self.session_id, limit=1)) <= 1:
+                self.memory.rename_session(self.session_id, self._auto_title(user_text))
+            self.memory.touch_session(self.session_id)
             messages = self._build_messages(user_text)
             schemas = get_schemas()
             reply = ""
@@ -65,7 +115,7 @@ class Assistant:
                 self.memory.set_pref("name", user_text.split("is ", 1)[1].strip())
             return reply or "(no response)"
         except ProviderError as exc:
-            return f"[JARVIS error] {exc}"
+            return f"[NIRA error] {exc}"
         except Exception:
             logger.exception("Assistant failure")
             return "Something went wrong while processing that request."
@@ -103,14 +153,22 @@ class Assistant:
     def _run_loop_stream(
         self, messages: list[dict[str, Any]], schemas: list[dict]
     ) -> Iterator[dict[str, Any]]:
-        """Yield state/tool events; emit a final event with the reply text."""
+        """Yield state/tool events; stream reply text as it is produced.
+
+        When the model does NOT request a tool (the common case), we stream
+        its tokens via chat_stream() and emit incremental ``text`` events so
+        the UI can speak sentence-by-sentence as words arrive — dramatically
+        cutting perceived voice latency. When tool calls ARE requested, we
+        fall back to the non-streaming chat() so tool parsing stays reliable.
+        """
         tried: set[str] = set()
         for _ in range(MAX_TOOL_STEPS):
             self._switch = None
             try:
+                # Tool-calling path: needs the full structured response, so
+                # use the non-streaming call and parse tool_calls.
                 result = self._model_call(messages, schemas, tried)
-            except OpenRouterError as exc:
-                # No fallback left — surface as an error event.
+            except ProviderError as exc:
                 yield {"type": "error", "message": str(exc)}
                 return
             if self._switch:
@@ -120,8 +178,25 @@ class Assistant:
             tool_calls = result["tool_calls"]
 
             if not tool_calls:
-                yield {"type": "final", "content": content.strip() or "(no response)"}
-                return
+                # No tools requested -> stream tokens for low-latency TTS.
+                full: list[str] = []
+                toolcall_seen = False
+                for piece in self.client.chat_stream(messages, tools=schemas):
+                    if isinstance(piece, dict) and piece.get("_toolcall"):
+                        toolcall_seen = True
+                        break
+                    full.append(piece)
+                    yield {"type": "text", "content": piece}
+                if toolcall_seen:
+                    # Model actually wanted a tool — re-run this step with the
+                    # non-streaming call so tool_calls parse correctly.
+                    result = self._model_call(messages, schemas, tried)
+                    content = result["content"]
+                    tool_calls = result["tool_calls"]
+                else:
+                    final_text = "".join(full).strip() or "(no response)"
+                    yield {"type": "final", "content": final_text}
+                    return
 
             assistant_msg: dict[str, Any] = {
                 "role": "assistant",
@@ -175,6 +250,10 @@ class Assistant:
         """
         try:
             self.memory.save_message(self.session_id, "user", user_text)
+            # Auto-title the session from its first user message only.
+            if len(self.memory.get_history(self.session_id, limit=1)) <= 1:
+                self.memory.rename_session(self.session_id, self._auto_title(user_text))
+            self.memory.touch_session(self.session_id)
             messages = self._build_messages(user_text)
             schemas = get_schemas()
 
@@ -186,9 +265,14 @@ class Assistant:
             yield {"type": "state", "state": "thinking"}
 
             final = ""
+            speaking_started = False
             for ev in self._run_loop_stream(messages, schemas):
                 if ev.get("type") == "final":
                     final = ev["content"]
+                if ev.get("type") == "text" and not speaking_started:
+                    # First token arrived — the user should hear speech soon.
+                    speaking_started = True
+                    yield {"type": "state", "state": "speaking"}
                 yield ev
 
             if final:
@@ -199,7 +283,8 @@ class Assistant:
                         "name", user_text.split("is ", 1)[1].strip()
                     )
 
-            yield {"type": "state", "state": "speaking"}
+            if not speaking_started:
+                yield {"type": "state", "state": "speaking"}
             if final:
                 yield {"type": "message", "content": final}
             yield {"type": "state", "state": "idle"}

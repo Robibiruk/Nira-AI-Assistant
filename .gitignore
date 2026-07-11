@@ -9,7 +9,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
 .Python
 build/
 develop-eggs/
@@ -32,7 +31,12 @@ env/
 venv/
 ENV/
 
+# Python specific
+.python-version
+
+# ==========================================
 # IDE
+# ==========================================
 .idea/
 .vscode/
 *.swp
@@ -40,20 +44,62 @@ ENV/
 *~
 
 # ==========================================
+# Security - API Keys & Secrets
+# ==========================================
+# Never commit these files with real API keys
+*.key
+*.keys
+*.secret
+*.token
+*.pem
+*.crt
+*.pfx
+
+# Local configuration files that may contain secrets
+*.local.json
+*.config.json
+!config/settings.yaml
+
+# local/custom LLM provider keys (user-added via Settings)
+config/custom_providers.json
+# external tool API keys (Google, GitHub, Spotify, ...)
+config/tool_keys.json
+config/features.json
+# Configuration file with potential secrets
+config/settings.yaml
+!config/settings.yaml.example
+
+# ==========================================
 # Environment Variables
 # ==========================================
 # Backend environment
 .env
 .env.*
-.env.example
+!.env.example
 
 # Frontend environment (in ui/ folder)
 ui/.env
 ui/.env.*
-ui/.env.example
+!ui/.env.example
 
 # Specific environment files
 OPENROUTER_API_KEY
+
+# Any environment files in subdirectories
+**/.env
+**/.env.*
+!**/.env.example
+
+# ==========================================
+# Build & Distribution
+# ==========================================
+*.exe
+*.dll
+*.dylib
+*.app
+*.msi
+*.dmg
+.pkg
 
 # ==========================================
 # Database
@@ -98,6 +144,3 @@ htmlcov/
 *.bak
 *.tmp
 *.temp
-
-# local/custom LLM provider keys (user-added via Settings)
-config/custom_providers.json
