@@ -1,9 +1,26 @@
 // Safe API helper: never throws "Unexpected end of JSON input".
 // Returns { ok, status, data, text } even when the body is empty/non-JSON.
+
+// Resolve the backend base URL:
+//  - VITE_API_BASE (e.g. https://nira-backend.onrender.com) wins when set (prod/deploy).
+//  - On localhost dev, hit the FastAPI backend directly at 127.0.0.1:8000.
+//  - Otherwise (deployed SPA with no VITE_API_BASE), use same-origin so a
+//    host rewrite/proxy can forward /chat, /sessions, etc. to the backend.
+const API_BASE =
+  import.meta.env.VITE_API_BASE ||
+  (typeof location !== 'undefined' && location.hostname === 'localhost'
+    ? 'http://127.0.0.1:8000'
+    : '')
+
+export function apiUrl(path) {
+  if (!API_BASE) return path
+  return API_BASE.replace(/\/+$/, '') + (path.startsWith('/') ? path : '/' + path)
+}
+
 export async function apiFetch(path, opts = {}) {
   let res
   try {
-    res = await fetch(path, {
+    res = await fetch(apiUrl(path), {
       headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
       ...opts,
     })
