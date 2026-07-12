@@ -8,6 +8,7 @@ import SettingsPanel from './components/SettingsPanel'
 import NameModal from './components/NameModal'
 import MemoryPage from './components/MemoryPage'
 import AppsPage from './components/AppsPage'
+import ProjectsPage from './components/ProjectsPage'
 import BrowserPage from './components/BrowserPage'
 import ResearchPage from './components/ResearchPage'
 import AboutPage from './components/AboutPage'
@@ -24,8 +25,23 @@ import {
   saveName,
   listSessions,
   saveSession,
+  setSessionProject,
   deleteSessionFs,
+  saveProjectFs,
+  listProjectsFs,
+  deleteProjectFs,
 } from './firebase'
+import {
+  lsGetName,
+  lsSetName,
+  lsListSessions,
+  lsSaveSession,
+  lsSetSessionProject,
+  lsDeleteSession,
+  lsListProjects,
+  lsSaveProject,
+  lsDeleteProject,
+} from './memoryStore'
 
 function uuid() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
@@ -71,42 +87,41 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [showGreeting, setShowGreeting] = useState(false)
 
-  // Boot: loading screen -> greeting; sign in anonymously + load saved name.
+  // Boot: loading screen -> greeting; restore from LOCAL storage first
+  // (guaranteed, instant), then sign in anonymously + sync with Firestore.
   useEffect(() => {
     const hideLoading = setTimeout(() => setLoading(false), 1400)
     const showWelcome = setTimeout(() => setShowGreeting(true), 1400)
     reportDeviceApps()
+
+    // 1) Local-first restore — name + last session from localStorage.
+    const localName = lsGetName()
+    if (localName) {
+      setName(localName)
+      setShowNameModal(false)
+    } else {
+      setShowNameModal(true)
+    }
+    const lastSid = localStorage.getItem('nira_last_session')
+    if (lastSid) {
+      setSessionIdState(lastSid)
+      nira.setSessionId(lastSid)
+      const local = lsListSessions().find((s) => s.sid === lastSid)
+      if (local) nira.loadMessages(local.messages || [])
+    }
+
+    // 2) Background Firebase sync (best-effort; never blocks the UI).
     authReady()
-      .then((uid) => {
-        if (!uid) return signInAnon() // first visit -> anonymous account
-        return uid
-      })
+      .then((u) => (u ? u : signInAnon()))
       .then(() => loadName())
       .then((saved) => {
-        setAuthReadyState(true)
         if (saved) {
           setName(saved)
+          lsSetName(saved)
           setShowNameModal(false)
-        } else {
-          setShowNameModal(true)
         }
       })
-      .then(() => {
-        // Restore the user's LAST session so memory survives reloads.
-        // localStorage keeps the id across reloads; Firestore holds the data.
-        const lastSid = localStorage.getItem('nira_last_session')
-        if (lastSid) {
-          setSessionIdState(lastSid)
-          nira.setSessionId(lastSid)
-          loadSessionSafe(lastSid)
-        }
-      })
-      .catch(() => {
-        // Firebase unavailable (offline / not configured) — degrade to a
-        // local-only name prompt without crashing the app.
-        setAuthReadyState(true)
-        setShowNameModal(true)
-      })
+      .catch(() => {})
     return () => { clearTimeout(hideLoading); clearTimeout(showWelcome) }
   }, [])
 
@@ -118,19 +133,31 @@ export default function App() {
     apiFetch('/tools/keys').then((r) => r.ok && setToolKeys((r.data && r.data.keys) || {}))
   }
 
-  // Load saved chat sessions for THIS anonymous user (Firestore).
+  // Load saved chat sessions (localStorage is authoritative; Firestore
+  // is merged in when available for cross-device sync).
   const refreshSessions = () => {
-    listSessions().then(setSessions).catch(() => {})
+    const local = lsListSessions()
+    setSessions(local)
+    listSessions().then((remote) => {
+      if (remote && remote.length) {
+        // Merge: remote wins on metadata, but keep any local-only ones.
+        const bySid = {}
+        for (const s of local) bySid[s.sid] = s
+        for (const s of remote) bySid[s.sid] = { ...s, updated: s.updated || Date.now() }
+        setSessions(Object.values(bySid).sort((a, b) => (b.updated || 0) - (a.updated || 0)))
+      }
+    }).catch(() => {})
   }
 
-  // Persist the current transcript to Firestore (called after each reply).
+  // Persist transcript: localStorage (guaranteed) + Firestore (sync).
   const persist = () => {
     const msgs = messagesRef.current
     if (!msgs.length) return
     localStorage.setItem('nira_last_session', sessionId)
-    const title = (msgs.find((m) => m.role === 'user')?.content || 'New chat')
-      .slice(0, 80)
-    saveSession(sessionId, title, msgs).catch(() => {})
+    const title = (msgs.find((m) => m.role === 'user')?.content || 'New chat').slice(0, 80)
+    const cur = lsGetSessionsSafe(sessionId)
+    lsSaveSession(sessionId, title, msgs, cur?.projectId)
+    saveSession(sessionId, title, msgs, cur?.projectId).catch(() => {})
   }
 
   const handleNewChat = () => {
@@ -142,12 +169,14 @@ export default function App() {
     setActivePage('chat')
   }
 
-  // Resume a past session: load its messages from Firestore.
+  // Resume a past session: local first, then Firestore if needed.
   const handleResume = (sid) => {
     setSessionIdState(sid)
     localStorage.setItem('nira_last_session', sid)
     nira.setSessionId(sid)
-    loadSessionSafe(sid)
+    const local = lsGetSessionsSafe(sid)
+    if (local) nira.loadMessages(local.messages || [])
+    else loadSessionSafe(sid)
     setActivePage('chat')
   }
 
@@ -158,18 +187,67 @@ export default function App() {
   }
 
   const handleRename = (sid, title) => {
-    // Firestore session titles are derived on save; rename is a no-op here
-    // but we keep the call harmless. (Lightweight: re-save with new title.)
-    const existing = sessions.find((s) => s.sid === sid)
-    if (existing) saveSession(sid, title || existing.title, []).catch(() => {})
+    lsSaveSession(sid, title, lsGetSessionsSafe(sid)?.messages || [], lsGetSessionsSafe(sid)?.projectId)
+    saveSession(sid, title, [], lsGetSessionsSafe(sid)?.projectId).catch(() => {})
     refreshSessions()
   }
 
   const handleDelete = (sid) => {
-    deleteSessionFs(sid).then(() => {
-      if (sid === sessionId) handleNewChat()
-      refreshSessions()
+    lsDeleteSession(sid)
+    deleteSessionFs(sid).catch(() => {})
+    if (sid === sessionId) handleNewChat()
+    refreshSessions()
+  }
+
+  // ---- Projects (workspace containers) ------------------------------------
+  const [projects, setProjects] = useState(() => lsListProjects())
+  const [activeProject, setActiveProject] = useState(null) // filter
+
+  const refreshProjects = () => {
+    setProjects(lsListProjects())
+    listProjectsFs().then((remote) => {
+      if (remote && remote.length) {
+        const byPid = {}
+        for (const p of lsListProjects()) byPid[p.pid] = p
+        for (const p of remote) byPid[p.pid] = { ...p, updated: p.updated || Date.now() }
+        setProjects(Object.values(byPid).sort((a, b) => (b.updated || 0) - (a.updated || 0)))
+      }
     }).catch(() => {})
+  }
+
+  const createProject = (proj) => {
+    const pid = proj.pid || `prj-${uuid()}`
+    const full = {
+      pid,
+      name: proj.name,
+      icon: proj.icon || '📁',
+      description: proj.description || '',
+      memories: proj.memories || [],
+      notes: proj.notes || [],
+      research: proj.research || [],
+      created: Date.now(),
+      updated: Date.now(),
+    }
+    lsSaveProject(full)
+    saveProjectFs(full).catch(() => {})
+    refreshProjects()
+    return pid
+  }
+
+  const deleteProject = (pid) => {
+    lsDeleteProject(pid)
+    deleteProjectFs(pid).catch(() => {})
+    if (activeProject === pid) setActiveProject(null)
+    refreshProjects()
+    refreshSessions()
+  }
+
+  // Tag the current chat with a project (so it shows under that project).
+  const moveToProject = (pid) => {
+    lsSetSessionProject(sessionId, pid)
+    setSessionProject(sessionId, pid).catch(() => {})
+    persist()
+    refreshSessions()
   }
 
   // Load persisted feature toggles once on mount.
@@ -190,7 +268,8 @@ export default function App() {
 
   useEffect(() => {
     if (activePage === 'settings') { refreshProviders(); refreshToolKeys() }
-    if (['memory', 'apps', 'browser', 'research'].includes(activePage)) refreshSessions()
+    if (['memory', 'apps', 'browser', 'research', 'projects'].includes(activePage)) refreshSessions()
+    if (activePage === 'projects') refreshProjects()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePage])
 
@@ -241,7 +320,7 @@ export default function App() {
 
   const handleName = (n) => {
     setName(n)
-    localStorage.setItem('nira_name', n)
+    lsSetName(n)
     setShowNameModal(false)
     // Anonymous sign-up + save name to Firestore (no visible login).
     signInAnon()
@@ -363,6 +442,18 @@ export default function App() {
           />
         ) : activePage === 'apps' ? (
           <AppsPage onSend={sendWrapped} />
+        ) : activePage === 'projects' ? (
+          <ProjectsPage
+            projects={projects}
+            sessions={sessions}
+            activeProject={activeProject}
+            onCreate={createProject}
+            onDelete={deleteProject}
+            onOpenProject={setActiveProject}
+            onMoveSession={moveToProject}
+            onResume={handleResume}
+            onNewChat={handleNewChat}
+          />
         ) : activePage === 'browser' ? (
           <BrowserPage onSend={sendWrapped} />
         ) : activePage === 'research' ? (
@@ -373,9 +464,22 @@ export default function App() {
           <>
             <div className="center-header">
               <h1 className="center-greeting">
-                Good {greetingPart}, <span className="accent">{name || 'there'}</span>.
+                Good {greetingPart}, <span className="accent">{name || 'you'}</span>.
               </h1>
               <p className="center-sub">How can I help today?</p>
+              <div className="header-project">
+                <span className="header-project-label">Project:</span>
+                <select
+                  className="project-select"
+                  value={lsGetSessionsSafe(sessionId)?.projectId || ''}
+                  onChange={(e) => moveToProject(e.target.value || null)}
+                >
+                  <option value="">None</option>
+                  {projects.map((p) => (
+                    <option key={p.pid} value={p.pid}>{p.icon} {p.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <Conversation messages={messages} streaming={streaming} />
             <ChatInput

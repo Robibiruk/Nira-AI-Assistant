@@ -1881,3 +1881,26 @@ body::before {
 html, body, #root { max-width: 100%; overflow-x: hidden; }
 * { box-sizing: border-box; }
 img, canvas { max-width: 100%; }
+
+/* ---- Projects ---------------------------------------------------------- */
+.header-project { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.header-project-label { color: var(--muted); font-size: 13px; }
+.project-select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border, #22364f); border-radius: 8px; padding: 6px 10px; font-size: 14px; }
+.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-top: 16px; }
+.project-card { background: var(--card); border: 1px solid var(--border, #22364f); border-radius: 16px; padding: 18px; text-align: left; color: var(--text); cursor: pointer; transition: transform .15s ease, border-color .15s ease; }
+.project-card:hover { transform: translateY(-3px); border-color: var(--accent, #36e0ff); }
+.project-card-icon { font-size: 34px; }
+.project-card-name { font-weight: 600; margin: 8px 0 6px; font-size: 17px; }
+.project-card-stats { display: flex; gap: 12px; color: var(--muted); font-size: 13px; }
+.project-card-meta { margin-top: 8px; color: var(--muted); font-size: 12px; }
+.project-detail { margin-top: 16px; }
+.project-detail-head { display: flex; align-items: center; gap: 14px; }
+.project-detail-icon { font-size: 40px; }
+.project-detail h2 { margin: 0; }
+.project-desc { color: var(--muted); margin: 4px 0 0; }
+.project-section { margin: 22px 0 10px; font-size: 16px; }
+.project-items { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.project-items li { background: var(--panel-2); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.emoji-picker { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.emoji-opt { background: var(--panel-2); border: 1px solid var(--border, #22364f); border-radius: 8px; font-size: 18px; width: 38px; height: 38px; cursor: pointer; }
+.emoji-opt.active { border-color: var(--accent, #36e0ff); background: var(--accent, #36e0ff22); }

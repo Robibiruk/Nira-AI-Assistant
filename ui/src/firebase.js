@@ -82,14 +82,18 @@ export async function loadName() {
 
 const sessionRef = (id, sid) => doc(db, 'users', id, 'sessions', sid)
 
-export async function saveSession(sid, title, messages) {
+export async function saveSession(sid, title, messages, projectId) {
   const id = uid()
   if (!id) return
-  await setDoc(
-    sessionRef(id, sid),
-    { title: title || 'New chat', updated: serverTimestamp(), messages },
-    { merge: true },
-  )
+  const data = { title: title || 'New chat', updated: serverTimestamp(), messages }
+  if (projectId !== undefined) data.projectId = projectId
+  await setDoc(sessionRef(id, sid), data, { merge: true })
+}
+
+export async function setSessionProject(sid, projectId) {
+  const id = uid()
+  if (!id) return
+  await setDoc(sessionRef(id, sid), { projectId: projectId || null }, { merge: true })
 }
 
 export async function loadSession(sid) {
@@ -116,4 +120,53 @@ export async function deleteSessionFs(sid) {
   const id = uid()
   if (!id) return
   await deleteDoc(sessionRef(id, sid))
+}
+
+// ---- Projects (workspace containers) ---------------------------------------
+//   users/{uid}/projects/{pid} -> { name, icon, description, created, updated,
+//                                   memories:[], notes:[], research:[] }
+const projectRef = (id, pid) => doc(db, 'users', id, 'projects', pid)
+
+export async function saveProjectFs(p) {
+  const id = uid()
+  if (!id) return
+  await setDoc(
+    projectRef(id, p.pid),
+    {
+      name: p.name,
+      icon: p.icon || '📁',
+      description: p.description || '',
+      memories: p.memories || [],
+      notes: p.notes || [],
+      research: p.research || [],
+      created: p.created || serverTimestamp(),
+      updated: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+export async function listProjectsFs() {
+  const id = uid()
+  if (!id) return []
+  const q = query(collection(db, 'users', id, 'projects'), orderBy('updated', 'desc'))
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => ({ pid: d.id, ...d.data() }))
+}
+
+export async function deleteProjectFs(pid) {
+  const id = uid()
+  if (!id) return
+  await deleteDoc(projectRef(id, pid))
+}
+
+export async function addProjectItemFs(pid, kind, item) {
+  const id = uid()
+  if (!id) return
+  const ref = projectRef(id, pid)
+  const snap = await getDoc(ref)
+  const data = snap.exists() ? snap.data() : {}
+  const arr = data[kind] || []
+  arr.unshift({ id: Date.now(), text: item, at: serverTimestamp() })
+  await setDoc(ref, { [kind]: arr, updated: serverTimestamp() }, { merge: true })
 }

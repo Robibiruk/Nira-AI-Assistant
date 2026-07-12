@@ -9,7 +9,7 @@ const CORE_ICON_HOVER = '/favicon-70.png'
 const NAV = [
   { id: 'chat', label: 'Chat', icon: '💬' },
   { id: 'memory', label: 'Memory', icon: '🧠' },
-  { id: 'apps', label: 'Apps', icon: '📦' },
+  { id: 'projects', label: 'Projects', icon: '📁' },
   { id: 'browser', label: 'Browser', icon: '🌐' },
   { id: 'research', label: 'Research', icon: '🔬' },
   { id: 'about', label: 'About', icon: 'ℹ' },
