@@ -69,7 +69,7 @@ const STATS = [
 const FEATURES = [
   { icon: MessageSquare, title: 'Chat', desc: 'Natural, multi-turn conversations with powerful AI models.' },
   { icon: Brain, title: 'Memory', desc: 'Long-term recall of your context, facts and preferences.' },
-  { icon: LayoutGrid, title: 'Apps', desc: 'Launch and orchestrate tools as mini-applications.' },
+  { icon: LayoutGrid, title: 'Projects', desc: 'Organize chats, memories and research into workspaces.' },
   { icon: Globe, title: 'Browser', desc: 'Browse, summarize and act on web content in-app.' },
   { icon: Microscope, title: 'Research', desc: 'Deep research with citations and structured notes.' },
   { icon: Settings, title: 'Settings', desc: 'Fine-tune models, providers, tools and behavior.' },

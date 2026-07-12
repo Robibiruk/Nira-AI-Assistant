@@ -1,6 +1,6 @@
 # 🤖 NIRA — Personal AI Assistant
 
-**NIRA** is a locally-hosted, privacy-first personal AI assistant that bridges natural-language conversation with real control of your computer. It runs a FastAPI backend on your machine and a polished, installable web UI (PWA) so it feels like a native desktop app. NIRA can talk — with natural, sentence-level streaming voice — and it can *act*: open apps, browse the web, run terminal commands, read/write files, check the weather, and search the internet, all orchestrated by an LLM through OpenRouter.
+**NIRA** is a privacy-first personal AI assistant that bridges natural-language conversation with real tools and a workspace for your work. It runs a FastAPI backend and a polished, installable web UI (PWA) so it feels like a native desktop app. NIRA can talk — with natural, sentence-level streaming voice — and it can *act*: browse the web, run terminal commands, read/write files, check the weather, and search the internet, all orchestrated by an LLM through OpenRouter.
 
 > Built by **Robel Biruk** — pharmacy student and software developer passionate about AI, automation and human-centered interfaces.
 
@@ -11,15 +11,22 @@
 ### 💬 Conversational Core
 - **Multi-step tool orchestration** — NIRA automatically decides which tools to call and chains them to complete a request.
 - **Streaming responses** — live Server-Sent Events (SSE) token/state streaming, with a visible "thinking → executing → speaking" core ring.
-- **Conversation memory** — every chat is saved as a named session in SQLite and survives reloads.
+- **Conversation memory** — every chat is saved as a named session. Memory is **local-first** (browser `localStorage`, so it always survives reloads) and **synced to Firebase Firestore** per anonymous user for cross-device access.
 - **Inline session management** — rename a session by clicking its title, delete via a confirmation popover (no browser alerts).
-- **Personalized greeting** — NIRA learns your name (first-run modal) and greets you by time of day.
+- **Personalized greeting** — NIRA asks your name once (first-run modal) and greets you by time of day ("Hello you" for new users, "Hello {name}" after).
 - **Automatic model fallback** — when the active model hits a rate limit, NIRA seamlessly switches to another available free model.
 
-### 🎙️ Voice (completed)
+### 🎙️ Voice
 - **Speech-to-text** — tap the core / mic to dictate; your speech is transcribed and sent as a message.
-- **Natural text-to-speech** — replies are spoken with **sentence-level streaming** (Kokoro / streaming TTS), prefetching the next sentence so there is no robotic pause between phrases. Tap the core to interrupt speech.
+- **Natural text-to-speech** — replies are spoken with **sentence-level streaming** via the browser's Web Speech API (keyless, no external dependency), prefetching the next sentence so there is no robotic pause between phrases. Tap the core to interrupt speech.
 - **Voice toggle** in the activity panel; mic state shown on the core ring.
+
+### 📁 Projects (workspace)
+- Group everything related to one goal into a **Project**: chats, memories, notes and research.
+- Create projects with a name, emoji icon and description.
+- Each project card shows 💬 chats / 🧠 memories / 🔬 research counts + last active.
+- Tag the current chat to a project from the **Project** dropdown in Chat, so it appears under that project.
+- Projects persist locally and sync to Firebase (under `users/{uid}/projects`).
 
 ### 🛠️ Built-in Tools
 | Tool | Description | Example |
@@ -28,22 +35,20 @@
 | `run_terminal_command` | Execute a shell command | "What's my IP?" |
 | `read_file` / `write_file` | Read or create/modify files | "Create a notes file" |
 | `list_directory` | List a directory's contents | "What's in Documents?" |
-| `open_app` | Launch a desktop application | "Open VS Code" |
-| `get_weather` | Current weather for a city | "Weather in Paris?" |
-| `web_search` | Web search | "Find Python tutorials" |
-| `desktop` | List installed/running apps & windows (Apps page) | "What's open?" |
-| `desktop/action` | Focus / close / launch a desktop app | "Close Chrome" |
+| `get_weather` | Current weather + forecast for a city (Open-Meteo with wttr.in fallback) | "Weather in Paris?" |
+| `web_search` | Web search (Tavily, key from `TAVILY_API_KEY` env) | "Find Python tutorials" |
+| `browser` | Browsing surface driven by the browser tool | "Summarize this page" |
 
 Tools can also be invoked directly with **slash commands** (e.g. `/tools`, `/clear`, `/model`, `/help`) which bypass the LLM and call the backend.
 
 ### 🖥️ App Surfaces (UI pages)
 - **Chat** — the main conversation with the holographic AI core ring.
 - **Memory** — all saved sessions; resume, inline-rename, or delete.
-- **Apps** — desktop control: see installed apps, running windows, and browser tabs; launch or close them (with a one-time permission grant).
+- **Projects** — workspace: create projects, see conversations/memories/notes/research grouped by project.
 - **Browser** — web browsing surface driven by the browser tool.
 - **Research** — research/summarization workflow.
 - **About** — project info: version, live statistics, creator, roadmap, license, contributing, and a scrolling footer marquee.
-- **Settings** — switch models, add/remove AI providers (OpenRouter + custom providers), and set per-tool API keys (Google, GitHub, Spotify, …).
+- **Settings** — switch models, add/remove AI providers (OpenRouter + custom providers), and set per-tool API keys (Google, GitHub, Spotify, Tavily, …).
 
 ### 🎨 Design & UX
 - **Holographic AI Core Ring** — color-coded state indicator:
@@ -53,8 +58,8 @@ Tools can also be invoked directly with **slash commands** (e.g. `/tools`, `/cle
   - 🔴 Red — Error
   - 🎤 Mic — Listening
 - **JARVIS / Apple-Vision-Pro-inspired dark UI** — cyan + purple neon, glassmorphism, 48px grid, responsive from 360px to 4K.
-- **Custom scrollbars** restyled app-wide (thin cyan thumb).
-- **Font Awesome** brand + UI icons, **Audiowide** display font for hero text.
+- **Font Awesome** (bundled locally, same-origin — no cross-origin storage/tracking-prevention issues), **Audiowide** display font for hero text.
+- Custom restyled scrollbars app-wide (thin cyan thumb).
 
 ### 📦 Progressive Web App (PWA)
 - Installable: "Install app" / "Add to Home Screen" from any modern browser.
@@ -64,7 +69,7 @@ Tools can also be invoked directly with **slash commands** (e.g. `/tools`, `/cle
 ### 🔌 Extensibility
 - **Model selection** at runtime; any OpenRouter-compatible model works.
 - **Custom providers** — add your own OpenAI-compatible endpoints in Settings.
-- **Tool API keys** — supply keys for external tools without editing config files.
+- **Tool API keys** — supply keys for external tools (e.g. Tavily) via the `TAVILY_API_KEY` env var or Settings; environment variables take priority.
 - **Feature toggles** — enable/disable capabilities from the activity panel (persisted server-side).
 - Adding a tool is a matter of subclassing `Tool` in `tools/` and registering it.
 
@@ -90,7 +95,8 @@ Tools can also be invoked directly with **slash commands** (e.g. `/tools`, `/cle
 │           │                       │                       │      │
 │  ┌────────▼────────┐    ┌────────▼────────┐    ┌─────▼──────┐   │
 │  │   Memory        │    │   Tool Manager   │    │  Runtime    │   │
-│  │  (SQLite)       │    │  (router/registry)│   │  (State)    │   │
+│  │ (localStorage + │    │  (router/registry)│   │  (State)    │   │
+│  │   Firestore)    │    │                   │   │             │   │
 │  └─────────────────┘    └─────────────────┘    └────────────┘   │
 │           │                       │                              │
 │  ┌────────▼────────┐    ┌────────▼────────┐                   │
@@ -111,6 +117,8 @@ User Request → FastAPI Endpoint → Assistant → AI Model + Tools → Respons
                 ↑                                    ↓
             Web UI (PWA) ←─────────────────────────┘
 ```
+
+**Memory storage:** chat sessions and the user's name are stored **local-first in `localStorage`** (guaranteed to work, survives reloads) and **mirrored to Firebase Firestore** (`users/{uid}/sessions`, `users/{uid}/projects`) when an anonymous account is available. Anonymous auth + per-uid Firestore rules keep data private.
 
 ---
 
@@ -195,21 +203,14 @@ In a supported browser, open the running app and choose **Install app** / **Add 
 | GET/POST | `/features` | List / toggle feature flags |
 | GET | `/status` | Runtime status readout |
 
-### Sessions
+### Tools & Weather
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/sessions` | List saved sessions |
-| GET | `/sessions/{sid}` | Load a session's messages |
-| POST | `/sessions/rename` | Rename a session |
-| POST | `/sessions/delete` | Delete a session |
-
-### Desktop & Voice
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/desktop` | Installed apps, running windows, browser tabs |
+| GET | `/desktop` | Installed apps, running windows, browser tabs (desktop builds) |
 | POST | `/desktop/action` | Focus / close / launch a desktop app |
-| POST | `/prefs/name` | Set the user's name |
-| POST | `/speak` | Text-to-speech synthesis |
+| POST | `/speak` | Text-to-speech synthesis (browser TTS on the client) |
+
+> Sessions/name are managed **client-side** (localStorage + Firebase), so there are no `/sessions` server endpoints — the backend is stateless for chat history.
 
 ---
 
@@ -222,7 +223,6 @@ openrouter:
   api_key: sk-or-...        # or set OPENROUTER_API_KEY env var
 model: poolside/laguna-m.1:free
 voice: true                 # enable voice (speech-to-text + TTS)
-memory: sqlite              # memory backend
 temperature: 0.7
 tools:
   enabled: []               # empty = all tools enabled
@@ -232,8 +232,15 @@ tools:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OPENROUTER_API_KEY` | OpenRouter API key (required) | — |
+| `TAVILY_API_KEY` | Tavily web-search key (optional; env wins over config) | — |
 | `UVICORN_HOST` | FastAPI host | 127.0.0.1 |
 | `UVICORN_PORT` | FastAPI port | 8000 |
+
+### Frontend env (Vercel / `ui/.env`)
+| Variable | Description |
+|----------|-------------|
+| `VITE_API_BASE` | Backend base URL (e.g. `https://nira-ai-backend.onrender.com`) |
+| `VITE_FIREBASE_API_KEY` | Firebase web API key (the only Firebase value wired to env; others are hardcoded in `firebase.js`) |
 
 ---
 
@@ -250,37 +257,37 @@ Nira-AI-Assistant/
 │   ├── providers.py        # Built-in + custom providers
 │   └── models.py           # Model ids / defaults
 ├── core/                   # Assistant brain
-│   ├── assistant.py        # Orchestration
-│   ├── memory.py           # SQLite memory
+│   ├── assistant.py        # Orchestration (stateless; gets history from client)
 │   ├── planner.py          # Multi-step planning
 │   ├── prompts.py          # System prompt / personality
 │   ├── runtime.py          # Runtime state
 │   └── router.py           # Tool manager + registry
 ├── tools/                  # Built-in tools
 │   ├── base.py             # Tool contract
-│   ├── apps.py             # App launcher / desktop control
 │   ├── browser.py          # Browser
 │   ├── files.py            # File read/write
-│   ├── search.py           # Web search
+│   ├── search.py           # Web search (Tavily)
 │   ├── terminal.py         # Terminal
-│   └── weather.py          # Weather
-├── speech/                 # Voice (STT + streaming TTS)
+│   ├── weather.py          # Weather (Open-Meteo + wttr.in fallback)
+│   └── _keys.py            # Per-tool key resolution (env > config)
 ├── ui/                     # Vite + React PWA frontend
-│   ├── public/             # manifest.webmanifest, sw.js, icons, Me.jpg
+│   ├── public/             # manifest.webmanifest, sw.js, icons, Me.jpg, fontawesome/
 │   ├── src/
 │   │   ├── App.jsx         # App shell + routing
 │   │   ├── main.jsx        # Entry + SW registration
 │   │   ├── index.css       # Global styles
 │   │   ├── api.js          # API client
+│   │   ├── firebase.js     # Firebase init + per-uid Firestore helpers
+│   │   ├── memoryStore.js  # Local-first localStorage persistence
+│   │   ├── utils.js         # Shared helpers (date formatting)
 │   │   ├── hooks/          # useNira, useVoice
-│   │   └── components/     # Chat, Memory, Apps, Browser, Research,
+│   │   └── components/     # Chat, Memory, Projects, Browser, Research,
 │   │                       #   About, Settings, Sidebars, …
 │   ├── package.json
 │   └── vite.config.js
 ├── config/
 │   └── settings.yaml       # User config (git-ignored)
-└── database/
-    └── memory.db           # SQLite store (auto-created, git-ignored)
+└── firestore.rules         # Per-uid Firestore security rules
 ```
 
 ---
@@ -293,12 +300,15 @@ Nira-AI-Assistant/
 - File Tools
 - Research
 - Voice Assistant
+- Projects (workspace)
+- Local-first memory + Firebase sync
 
 **Upcoming**
 - Plugin Marketplace
 - Mobile App
 - Multi-Agent System
 - Smart Home Integration
+- File/image attachments inside Projects (Firebase Storage ready)
 
 ---
 
@@ -348,7 +358,7 @@ Add an OpenAI-compatible endpoint in **Settings → Providers** (no code needed)
 - **Terminal execution** runs arbitrary shell commands — only enable for trusted local use; restrict via `tools.enabled`.
 - **API keys** are never committed (see `.gitignore`); use env vars or `config/settings.yaml` (git-ignored).
 - **File tools** can read/write any file on your system.
-- Everything runs **locally** — your conversations stay on your machine (SQLite).
+- **Memory is private** — chat history lives in your browser (`localStorage`) and your own Firebase account (anonymous auth, per-uid Firestore rules). No shared server database.
 
 ---
 

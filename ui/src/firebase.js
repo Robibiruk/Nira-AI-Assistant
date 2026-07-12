@@ -112,7 +112,12 @@ export async function listSessions() {
   const snap = await getDocs(q)
   return snap.docs.map((d) => {
     const data = d.data()
-    return { sid: d.id, title: data.title || 'New chat', updated: data.updated || null }
+    return {
+      sid: d.id,
+      title: data.title || 'New chat',
+      updated: data.updated || null,
+      projectId: data.projectId || null,
+    }
   })
 }
 

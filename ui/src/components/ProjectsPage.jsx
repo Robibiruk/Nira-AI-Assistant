@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { formatDate, formatShortDate } from '../utils'
 
 const EMOJIS = ['🚀', '🎓', '💼', '💻', '🌍', '📖', '🏋', '🎨', '🔬', '📱', '🧠', '⭐']
 
@@ -123,7 +124,7 @@ export default function ProjectsPage({
               <div className="session-card" key={s.sid}>
                 <div className="session-main" onClick={() => onResume(s.sid)}>
                   <div className="session-title">{s.title || 'New chat'}</div>
-                  <div className="session-meta">{new Date(s.updated).toLocaleString()}</div>
+                  <div className="session-meta">{formatDate(s.updated)}</div>
                 </div>
               </div>
             ))}
@@ -165,7 +166,7 @@ export default function ProjectsPage({
                   <span>🔬 {p.research?.length || 0}</span>
                 </div>
                 <div className="project-card-meta">
-                  Updated {p.updated ? new Date(p.updated).toLocaleDateString() : '—'}
+                  Updated {formatShortDate(p.updated)}
                 </div>
               </button>
             )

@@ -142,9 +142,18 @@ export default function App() {
     listSessions().then((remote) => {
       if (remote && remote.length) {
         // Merge: remote wins on metadata, but keep any local-only ones.
+        // Preserve projectId (remote may legitimately have it; fall back
+        // to the local value so a chat never silently loses its project).
         const bySid = {}
         for (const s of local) bySid[s.sid] = s
-        for (const s of remote) bySid[s.sid] = { ...s, updated: s.updated || Date.now() }
+        for (const s of remote) {
+          const localS = bySid[s.sid] || {}
+          bySid[s.sid] = {
+            ...s,
+            updated: s.updated || localS.updated || Date.now(),
+            projectId: s.projectId || localS.projectId || null,
+          }
+        }
         setSessions(Object.values(bySid).sort((a, b) => (b.updated || 0) - (a.updated || 0)))
       }
     }).catch(() => {})

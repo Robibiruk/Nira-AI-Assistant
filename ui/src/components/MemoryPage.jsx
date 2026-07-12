@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { formatDate } from '../utils'
 
 export default function MemoryPage({ sessions, onResume, onRename, onDelete, onNewChat }) {
   const [editingId, setEditingId] = useState(null)
@@ -56,7 +57,7 @@ export default function MemoryPage({ sessions, onResume, onRename, onDelete, onN
                 <>
                   <div className="session-title">{s.title || 'New chat'}</div>
                   <div className="session-meta">
-                    {new Date(s.updated).toLocaleString()}
+                    {formatDate(s.updated)}
                   </div>
                 </>
               )}
