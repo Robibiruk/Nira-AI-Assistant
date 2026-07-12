@@ -60,7 +60,7 @@ SERVICES = {
     "spotify": {
         "auth_url": "https://accounts.spotify.com/authorize",
         "token_url": "https://accounts.spotify.com/api/token",
-        "scopes": ["user-read-playback-state", "user-read-currently-playing"],
+        "scopes": ["user-read-playback-state", "user-read-currently-playing", "user-read-email", "user-read-private", "user-library-read", "user-top-read"],
         "client_id_env": "SPOTIFY_CLIENT_ID",
         "client_secret_env": "SPOTIFY_CLIENT_SECRET",
         "refreshable": True,
@@ -72,6 +72,7 @@ SERVICES = {
             "openid",
             "https://www.googleapis.com/auth/userinfo.email",
             "https://www.googleapis.com/auth/userinfo.profile",
+            "https://www.googleapis.com/auth/gmail.readonly",
         ],
         "client_id_env": "GOOGLE_CLIENT_ID",
         "client_secret_env": "GOOGLE_CLIENT_SECRET",

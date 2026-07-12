@@ -33,6 +33,8 @@ from tools.translate import translate_tool
 from tools.wikipedia import wikipedia_tool
 from tools.spotify import spotify_tool
 from tools.screenshot import screenshot_tool
+from tools.gmail import gmail_tool
+from tools.google_account import google_tool
 
 # ---- Search tools ----
 from tools.search_arxiv import arxiv_search_tool
@@ -58,6 +60,8 @@ ALL_TOOLS = [
     translate_tool,
     wikipedia_tool,
     spotify_tool,
+    gmail_tool,
+    google_tool,
     screenshot_tool,
     # Windows system
     windows_tool,
