@@ -73,7 +73,14 @@ def list_openai_compatible_models(base_url: str, api_key: str | None = None,
             resp = client.get(url, headers=headers)
         resp.raise_for_status()
         data = resp.json()
-    except (httpx.HTTPError, ValueError):
+    except (httpx.HTTPError, ValueError) as exc:
+        # Loud failure: e.g. a local provider (Jan/Ollama/LM Studio) running
+        # on the user's machine is unreachable from a cloud backend (Render),
+        # or the base_url is wrong. Surfaced in logs so "added but no models"
+        # is diagnosable instead of silently empty.
+        from loguru import logger
+
+        logger.warning("custom provider model discovery failed for {}: {}", base_url, exc)
         return []
     items = data.get("data", data) if isinstance(data, dict) else data
     out: list[dict[str, Any]] = []

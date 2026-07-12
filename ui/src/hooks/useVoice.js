@@ -11,6 +11,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 // (no overlap, no per-sentence rebuild) instead of waiting for the whole
 // reply to be generated before the first sound.
 
+import { apiUrl } from '../api'
+
 let _currentAudio = null
 let _currentUtterance = null
 
@@ -54,7 +56,7 @@ let _speakChain = Promise.resolve()
 function _fetchSpeechBlob(text) {
   _speakChain = _speakChain
     .then(() =>
-      fetch('/speak', {
+      fetch(apiUrl('/speak'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text }),

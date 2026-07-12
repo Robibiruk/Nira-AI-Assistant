@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { apiFetch } from '../api'
+import { apiFetch, apiUrl } from '../api'
 import { SLASH_COMMANDS, parseSlash } from '../slash'
 
 // Tool catalogue shown in the side panel. `id` must match the tool name the
@@ -180,7 +180,7 @@ export function useNira(sessionId = 'web', options = {}) {
       }
 
       try {
-        const res = await fetch('/chat/stream', {
+        const res = await fetch(apiUrl('/chat/stream'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: content, session_id: sessionIdRef.current }),

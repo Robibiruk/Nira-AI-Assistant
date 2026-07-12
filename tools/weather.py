@@ -34,11 +34,18 @@ class WeatherTool(Tool):
         "city": {
             "type": "string",
             "description": "City name to look up, e.g. 'San Francisco'.",
-        }
+        },
+        "location": {
+            "type": "string",
+            "description": "Alias for city (some models pass 'location').",
+        },
     }
     required = ["city"]
 
-    def run(self, city: str) -> str:
+    def run(self, city: str = "", location: str = "") -> str:
+        city = (city or location or "").strip()
+        if not city:
+            return "No city or location provided."
         try:
             geo = httpx.get(
                 _GEOCODE_URL, params={"name": city, "count": 1}, timeout=15

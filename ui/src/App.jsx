@@ -15,7 +15,7 @@ import LoadingScreen from './components/LoadingScreen'
 import GreetingOverlay from './components/GreetingOverlay'
 import { useNira } from './hooks/useNira'
 import { useVoice, speakNira, stopSpeech, enqueueNira } from './hooks/useVoice'
-import { apiFetch } from './api'
+import { apiFetch, apiUrl } from './api'
 import { reportDeviceApps } from './device'
 
 const NAME_KEY = 'nira_name'
@@ -181,7 +181,7 @@ export default function App() {
     localStorage.setItem(NAME_KEY, n)
     setName(n)
     setShowNameModal(false)
-    fetch('/prefs/name', {
+    fetch(apiUrl('/prefs/name'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: n, session_id: 'web' }),

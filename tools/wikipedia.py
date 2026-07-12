@@ -24,18 +24,31 @@ class WikipediaTool(Tool):
         if not q:
             return "No query provided."
         try:
-            resp = httpx.get(f"{_API}/{q.replace(' ', '_')}", timeout=20, headers={"Accept": "application/json"})
+            resp = httpx.get(
+                f"{_API}/{q.replace(' ', '_')}",
+                timeout=20,
+                headers={"Accept": "application/json"},
+            )
             if resp.status_code == 200:
-                data = resp.json()
-                return f"{data.get('title')}: {data.get('extract', '')}"
-            # Fall back to open search if the exact title missed.
+                try:
+                    data = resp.json()
+                except ValueError:
+                    data = {}
+                if data.get("extract"):
+                    return f"{data.get('title')}: {data.get('extract', '')}"
+            # Fall back to open search if the exact title missed or returned
+            # non-JSON (Wikipedia returns HTML on 404, which .json() can't parse).
             s = httpx.get(
                 "https://en.wikipedia.org/w/api.php",
                 params={"action": "opensearch", "search": q, "limit": 1, "format": "json"},
                 timeout=20,
-            ).json()
-            if len(s) > 3 and s[3]:
-                return f"Wikipedia: {s[2][0] if s[2] else ''} {s[3][0]}"
+            )
+            try:
+                s_data = s.json()
+            except ValueError:
+                return f"No Wikipedia article found for '{q}'."
+            if len(s_data) > 3 and s_data[3]:
+                return f"Wikipedia: {s_data[2][0] if s_data[2] else ''} {s_data[3][0]}"
             return f"No Wikipedia article found for '{q}'."
         except httpx.HTTPError as exc:
             return f"Wikipedia request failed: {exc}"

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { apiFetch, apiError } from '../api'
+import { detectDevice } from '../device'
 
 const PERM_KEY = 'nira.apps.permission'
 const STORE_LINKS = {
@@ -16,7 +17,7 @@ function monogram(name) {
 
 export default function AppsPage({ onSend }) {
   const [granted, setGranted] = useState(() => localStorage.getItem(PERM_KEY) === '1')
-  const [data, setData] = useState({ installed: [], windows: [], apps: [], tabs: [], platform: 'windows' })
+  const [data, setData] = useState({ installed: [], windows: [], apps: [], tabs: [], platform: detectDevice() })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [tab, setTab] = useState('installed') // installed | windows | tabs
@@ -26,19 +27,44 @@ export default function AppsPage({ onSend }) {
   const refresh = useCallback(async () => {
     setLoading(true)
     setError('')
-    const res = await apiFetch('/desktop')
-    setLoading(false)
-    if (!res.ok || !res.data) {
-      setError(apiError(res, 'failed to read desktop'))
-      return
+    // Detect the USER's real device in the browser. On a remote backend the
+    // server's own OS is irrelevant (e.g. Linux/flathub) — we want the
+    // client's platform so the store link (Play Store / App Store / etc.) is
+    // correct and the app list comes from the device report.
+    const clientDevice = detectDevice()
+    try {
+      const res = await apiFetch('/device/apps')
+      if (res.ok && res.data) {
+        const apps = (res.data.apps || []).map((a) =>
+          typeof a === 'string' ? { name: a } : { name: a.name || String(a) },
+        )
+        setData((d) => ({
+          ...d,
+          apps,
+          platform: res.data.device || clientDevice,
+        }))
+      }
+    } catch {
+      /* non-fatal */
     }
-    setData({
-      installed: res.data.installed || [],
-      windows: res.data.windows || [],
-      apps: res.data.apps || [],
-      tabs: res.data.tabs || [],
-      platform: res.data.platform || 'windows',
-    })
+    // On Windows, also pull the locally-enumerated desktop snapshot.
+    if (clientDevice === 'windows') {
+      const res = await apiFetch('/desktop')
+      setLoading(false)
+      if (!res.ok || !res.data) {
+        setError(apiError(res, 'failed to read desktop'))
+        return
+      }
+      setData({
+        installed: res.data.installed || [],
+        windows: res.data.windows || [],
+        apps: res.data.apps || [],
+        tabs: res.data.tabs || [],
+        platform: res.data.platform || 'windows',
+      })
+    } else {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
