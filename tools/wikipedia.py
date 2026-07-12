@@ -23,11 +23,14 @@ class WikipediaTool(Tool):
         q = (query or "").strip()
         if not q:
             return "No query provided."
+        # Wikipedia blocks requests with no User-Agent (returns 403 on servers),
+        # which is why lookups failed from the deployed backend.
+        headers = {"Accept": "application/json", "User-Agent": "NIRA/1.0 (assistant)"}
         try:
             resp = httpx.get(
                 f"{_API}/{q.replace(' ', '_')}",
                 timeout=20,
-                headers={"Accept": "application/json"},
+                headers=headers,
             )
             if resp.status_code == 200:
                 try:
@@ -40,15 +43,25 @@ class WikipediaTool(Tool):
             # non-JSON (Wikipedia returns HTML on 404, which .json() can't parse).
             s = httpx.get(
                 "https://en.wikipedia.org/w/api.php",
-                params={"action": "opensearch", "search": q, "limit": 1, "format": "json"},
+                params={"action": "opensearch", "search": q, "limit": 3, "format": "json"},
                 timeout=20,
+                headers=headers,
             )
             try:
                 s_data = s.json()
             except ValueError:
                 return f"No Wikipedia article found for '{q}'."
+            # opensearch shape: [query, [titles], [descriptions], [urls]]
             if len(s_data) > 3 and s_data[3]:
-                return f"Wikipedia: {s_data[2][0] if s_data[2] else ''} {s_data[3][0]}"
+                title = (s_data[1][0] if s_data[1] else "")
+                snippet = (s_data[2][0] if s_data[2] else "")
+                url = (s_data[3][0] if s_data[3] else "")
+                text = f"Wikipedia: {title}"
+                if snippet:
+                    text += f" — {snippet}"
+                if url:
+                    text += f"\n   {url}"
+                return text
             return f"No Wikipedia article found for '{q}'."
         except httpx.HTTPError as exc:
             return f"Wikipedia request failed: {exc}"

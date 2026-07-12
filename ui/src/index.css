@@ -1362,13 +1362,6 @@ body::before {
 .topbar-core .core-label { display: none; }
 
 /* ---- New pages: Memory, Screen, Browser, Research ---- */
-@media (max-height: 720px) {
-  .app { padding: 12px; gap: 12px; }
-  .core-wrap, .core-canvas { width: 140px; height: 140px; }
-  .center-greeting { font-size: 22px; }
-}
-
-/* ---- New pages: Memory, Screen, Browser, Research ---- */
 .page {
   display: flex;
   flex-direction: column;

@@ -14,17 +14,30 @@ _KEYS_PATH = _BASE / "config" / "tool_keys.json"
 
 
 def get_tool_key(name: str) -> str:
-    """Return the stored api_key for a tool, or '' if not configured."""
+    """Return the stored api_key for a tool, or '' if not configured.
+
+    Checks config/tool_keys.json first, then falls back to the environment
+    variable ``<NAME>_API_KEY`` (e.g. TAVILY_API_KEY). This lets a key
+    set in the host's env (Render / Vercel / .env) work without manually
+    saving it in Settings.
+    """
     try:
         if not _KEYS_PATH.exists():
             return ""
         data = json.loads(_KEYS_PATH.read_text(encoding="utf-8")) or {}
     except (ValueError, OSError):
-        return ""
+        data = {}
     entry = data.get(name)
     if isinstance(entry, dict):
-        return (entry.get("api_key") or "").strip()
-    return str(entry or "").strip()
+        key = (entry.get("api_key") or "").strip()
+    else:
+        key = str(entry or "").strip()
+    if key:
+        return key
+    # Fallback to the conventional environment variable.
+    import os
+
+    return (os.getenv(f"{name.upper()}_API_KEY") or "").strip()
 
 
 def get_tool_extra(name: str) -> dict:
