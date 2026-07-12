@@ -87,9 +87,6 @@
   .na-fixed-row { flex-direction: column; flex-wrap: nowrap; }
   .na-fixed-box, .na-fixed-box--sm { max-width: 100%; width: 100%; }
 }
-@media (max-width: 740px) {
-  .na-license__cards { grid-template-columns: 1fr; }
-}
 
 
 @media (max-width: 1024px) {
@@ -369,6 +366,10 @@
   box-shadow: 0 0 26px rgba(157, 120, 255, 0.1);
 }
 .na-license__card--contrib .na-license__title { color: #b79bff; }
+/* Stack license + contributing cards vertically (up/down) at <=740px */
+@media (max-width: 740px) {
+  .na-license__cards { grid-template-columns: 1fr; }
+}
 .na-license__icon { font-size: 28px; line-height: 1; flex-shrink: 0; }
 .na-license__body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .na-license__title { font-size: 18px; font-weight: 700; color: var(--green); margin: 0; }
