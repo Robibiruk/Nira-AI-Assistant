@@ -38,8 +38,10 @@ class OpenBrowserTool(Tool):
         ctrl = _controller()
         if ctrl is None:
             # Headless server (Render/CI): the frontend opens the URL in the
-            # user's actual browser via the `open_url` event.
-            return f"OPEN_URL::{target}"
+            # user's actual browser (new tab) via the `open_url` event. The
+            # sentinel is stripped before the message is shown; the plain URL
+            # remains as a clickable fallback if the popup is blocked.
+            return f"Opening in a new tab: OPEN_URL::{target}"
         ctrl.open(target)
         return f"Opened browser at {target}"
 

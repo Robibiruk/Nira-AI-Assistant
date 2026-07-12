@@ -17,25 +17,35 @@ from typing import Any, Iterator
 
 from loguru import logger
 
-# URLs that surface in tool outputs (search results, Spotify links, browser
-# tool, etc.). The frontend opens these in the USER'S browser (the server is
-# headless on Render and cannot open a window itself).
+# The open_browser tool returns an "OPEN_URL::<url>" sentinel when it runs on a
+# headless host (Render) and cannot open a window itself. We surface ONLY that
+# explicit intent to the frontend so it opens the URL in the user's browser.
+# We deliberately do NOT auto-open every URL that appears in a tool result
+# (search/Spotify results contain many links, including docs) — that would
+# hijack the user's tab. Those links are shown in chat for the user to click.
 import re
 
-_URL_RE = re.compile(r'(?:OPEN_URL::)?https?://[^\s)<>\]]+')
+_OPEN_URL_RE = re.compile(r'OPEN_URL::(https?://[^\s)<>\]]+)')
 
 
-def _extract_urls(text):
+def _extract_open_urls(text):
     if not text:
         return []
     seen = set()
     out = []
-    for m in _URL_RE.finditer(text):
-        u = m.group(0).rstrip('.,;')
+    for m in _OPEN_URL_RE.finditer(text):
+        u = m.group(1).rstrip('.,;')
         if u not in seen:
             seen.add(u)
             out.append(u)
     return out
+
+
+def _strip_open_url_sentinels(text):
+    # Turn "OPEN_URL::https://x" into a clean human-readable line.
+    if not text:
+        return text
+    return _OPEN_URL_RE.sub(r'\1', text)
 
 
 from ai.provider import MultiProviderClient, ProviderError
@@ -242,17 +252,19 @@ class Assistant:
                 logger.info(f"Tool call: {name}({args})")
                 yield {"type": "state", "state": "executing", "tool": name}
                 output = execute(name, args)
-                yield {"type": "tool_result", "tool": name, "output": output}
-                # Surface any URLs in the result so the FRONTEND can open them
-                # in the user's own browser (the server has no display and
-                # cannot launch a window — e.g. Render).
-                for u in _extract_urls(output):
+                # Only the explicit open_browser tool asks the FRONTEND to
+                # open a URL in the user's browser (via the OPEN_URL:: sentinel).
+                # Search/Spotify results are NOT auto-opened.
+                open_urls = _extract_open_urls(output)
+                clean_output = _strip_open_url_sentinels(output)
+                yield {"type": "tool_result", "tool": name, "output": clean_output}
+                for u in open_urls:
                     yield {"type": "open_url", "url": u, "tool": name}
                 messages.append(
                     {
                         "role": "tool",
                         "tool_call_id": tc.get("id"),
-                        "content": output,
+                        "content": clean_output,
                     }
                 )
 
