@@ -136,7 +136,10 @@ def save_token(service: str, *, access_token: str, refresh_token: str | None = N
     """Encrypt and upsert the token for ``service`` under the local user."""
     col = _collection()
     if col is None:
-        raise RuntimeError("OAuth storage unavailable (MONGODB_URI not configured).")
+        raise RuntimeError(
+            "OAuth storage unavailable: MONGODB_URI is not set in the backend environment. "
+            "Add MONGODB_URI (and TOKEN_ENCRYPTION_KEY) to the Render service's environment variables."
+        )
     enc_access = _encrypt(access_token)
     enc_refresh = _encrypt(refresh_token) if refresh_token else None
     col.update_one(
