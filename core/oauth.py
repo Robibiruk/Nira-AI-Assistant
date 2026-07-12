@@ -107,6 +107,24 @@ def _redirect_uri(service: str) -> str:
     return f"{base}/auth/{service}/callback"
 
 
+def _cookie_attrs(req: Request | None):
+    """Cookie SameSite/Secure policy.
+
+    The OAuth state cookie is set during a *cross-site* navigation (the SPA on
+    Vercel calls the backend on Render). Modern browsers block third-party
+    cookies that are SameSite=Lax in that context, so the cookie never reaches
+    the callback and validation fails with 'Invalid OAuth state'. The fix is to
+    send the cookie as SameSite=None; Secure, which is explicitly allowed
+    cross-site. We only fall back to Lax when the backend is served over plain
+    http (local dev), because Secure cookies can't be set over http.
+    """
+    secure = not _env("OAUTH_INSECURE_COOKIE")
+    if req is not None and getattr(req.url, "scheme", "https") == "http":
+        secure = False
+    samesite = "none" if secure else "lax"
+    return samesite, secure
+
+
 def _service_cfg(service: str) -> dict:
     cfg = SERVICES.get(service)
     if cfg is None:
@@ -130,13 +148,14 @@ def oauth_login(service: str, response: Response, req: Request) -> RedirectRespo
             detail=f"{cfg['client_id_env']} is not set on the server; cannot start {service} OAuth.",
         )
     state = secrets.token_urlsafe(24)
+    samesite, secure = _cookie_attrs(req)
     response.set_cookie(
         STATE_COOKIE,
         state,
         max_age=STATE_MAX_AGE,
         httponly=True,
-        samesite="lax",
-        secure=not _env("OAUTH_INSECURE_COOKIE"),
+        samesite=samesite,
+        secure=secure,
     )
     params = {
         "client_id": cid,
@@ -157,8 +176,8 @@ def oauth_login(service: str, response: Response, req: Request) -> RedirectRespo
             verifier,
             max_age=STATE_MAX_AGE,
             httponly=True,
-            samesite="lax",
-            secure=not _env("OAUTH_INSECURE_COOKIE"),
+            samesite=samesite,
+            secure=secure,
         )
     if cfg.get("refreshable"):
         params["access_type"] = "offline"
