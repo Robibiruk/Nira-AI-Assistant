@@ -198,6 +198,7 @@ def storage_health() -> dict:
     col = _collection()
     return {
         "available": col is not None,
+        "configured": bool((os.getenv("MONGODB_URI") or "").strip()),
         "error": _store_error,
         "db": (_db.name if _db is not None else None),
         "collection": _COLLECTION,
