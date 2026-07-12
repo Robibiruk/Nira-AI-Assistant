@@ -39,32 +39,18 @@ services:
         value: en-gb
       - key: JARVIS_KOKORO_SPEED
         value: "1.0"
-      # ---- OAuth integration storage (REQUIRED for Tool Connections) ----
-      - key: MONGODB_URI
-        sync: false        # your MongoDB Atlas connection string (nira_oauth db)
-      - key: TOKEN_ENCRYPTION_KEY
-        sync: false        # Fernet key (python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
-      - key: WEB_ORIGIN
-        sync: false        # frontend origin, e.g. https://nira-ai-assistant.vercel.app (for CORS + cookie landing)
-      # ---- OAuth provider client credentials ----
-      - key: GITHUB_CLIENT_ID
-        sync: false
-      - key: GITHUB_CLIENT_SECRET
-        sync: false
-      - key: SPOTIFY_CLIENT_ID
-        sync: false
-      - key: SPOTIFY_CLIENT_SECRET
-        sync: false
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: REDDIT_CLIENT_ID
-        sync: false
-      - key: REDDIT_CLIENT_SECRET
-        sync: false
-      - key: X_CLIENT_ID
-        sync: false
-      - key: X_CLIENT_SECRET
-        sync: false
+      # ---- OAuth integration storage ----
+      # These are managed in the Render DASHBOARD (Environment) so secret values
+      # are not committed to git. IMPORTANT: do NOT declare them here with
+      # sync:false — on each deploy Render resets unset sync:false vars to empty,
+      # which wiped MONGODB_URI and broke token storage. Set them once in the
+      # dashboard and they persist across deploys.
+      #   MONGODB_URI            (Atlas connection string -> nira_oauth db)
+      #   TOKEN_ENCRYPTION_KEY   (Fernet key)
+      #   WEB_ORIGIN             (https://nira-ai-assistant.vercel.app)
+      #   GITHUB_CLIENT_ID / _SECRET
+      #   SPOTIFY_CLIENT_ID / _SECRET
+      #   GOOGLE_CLIENT_ID / _SECRET
+      #   REDDIT_CLIENT_ID / _SECRET
+      #   X_CLIENT_ID / _SECRET
       # PORT is auto-injected by Render; do not hardcode it.
