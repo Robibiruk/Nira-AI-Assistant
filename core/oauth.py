@@ -29,7 +29,11 @@ from core import oauth_store as store
 router = APIRouter(prefix="/auth", tags=["oauth"])
 
 # Where to send the user back after connecting (the Integrations UI).
-_RETURN_TO = os.getenv("OAUTH_RETURN_TO", "/?tab=settings").strip() or "/?tab=settings"
+# Default to the frontend origin (WEB_ORIGIN, e.g. the Vercel app) so the
+# callback lands on the SPA, not the API backend. On local dev with no
+# WEB_ORIGIN, fall back to a relative path (same origin as the SPA).
+_WEB_ORIGIN = (os.getenv("WEB_ORIGIN") or "").rstrip("/")
+_RETURN_TO = (os.getenv("OAUTH_RETURN_TO") or "").strip() or (_WEB_ORIGIN + "/?tab=settings" if _WEB_ORIGIN else "/?tab=settings")
 
 STATE_COOKIE = "oauth_state"
 VERIFIER_COOKIE = "oauth_verifier"  # PKCE code_verifier (X only)
@@ -149,14 +153,6 @@ def oauth_login(service: str, response: Response, req: Request) -> RedirectRespo
         )
     state = secrets.token_urlsafe(24)
     samesite, secure = _cookie_attrs(req)
-    response.set_cookie(
-        STATE_COOKIE,
-        state,
-        max_age=STATE_MAX_AGE,
-        httponly=True,
-        samesite=samesite,
-        secure=secure,
-    )
     params = {
         "client_id": cid,
         "redirect_uri": _redirect_uri(service),
@@ -171,7 +167,25 @@ def oauth_login(service: str, response: Response, req: Request) -> RedirectRespo
         chal = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
         params["code_challenge"] = chal
         params["code_challenge_method"] = "S256"
-        response.set_cookie(
+    if cfg.get("refreshable"):
+        params["access_type"] = "offline"
+        params["prompt"] = "consent"
+    url = f"{cfg['auth_url']}?{urllib.parse.urlencode(params)}"
+    # IMPORTANT: set cookies on the RedirectResponse we actually return.
+    # Setting them on the injected `response` and then returning a *different*
+    # RedirectResponse drops the Set-Cookie header (state never reaches the
+    # callback -> "Invalid OAuth state").
+    redirect = RedirectResponse(url)
+    redirect.set_cookie(
+        STATE_COOKIE,
+        state,
+        max_age=STATE_MAX_AGE,
+        httponly=True,
+        samesite=samesite,
+        secure=secure,
+    )
+    if cfg.get("pkce") and verifier:
+        redirect.set_cookie(
             VERIFIER_COOKIE,
             verifier,
             max_age=STATE_MAX_AGE,
@@ -179,11 +193,7 @@ def oauth_login(service: str, response: Response, req: Request) -> RedirectRespo
             samesite=samesite,
             secure=secure,
         )
-    if cfg.get("refreshable"):
-        params["access_type"] = "offline"
-        params["prompt"] = "consent"
-    url = f"{cfg['auth_url']}?{urllib.parse.urlencode(params)}"
-    return RedirectResponse(url)
+    return redirect
 
 
 @router.get("/{service}/callback")
