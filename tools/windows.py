@@ -192,11 +192,19 @@ class ListAppsTool(Tool):
     required: list[str] = []
 
     def run(self) -> str:
+        # Windows: enumerate locally via pywin32.
         apps = list_open_apps()
-        if not apps:
-            return "No running applications found (or not supported on this platform)."
-        lines = [f"{a['name']} (PID: {a['pid']})" for a in apps]
-        return "Running apps:\n" + "\n".join(lines)
+        if apps:
+            lines = [f"{a['name']} (PID: {a['pid']})" for a in apps]
+            return "Running apps:\n" + "\n".join(lines)
+        # Any other device: use what the client reported (Android/iOS/PC/linux).
+        from core.device_apps import get_apps, has_apps
+
+        if has_apps():
+            store = get_apps()
+            lines = [str(a.get("name") if isinstance(a, dict) else a) for a in store["apps"]]
+            return f"Running apps (reported by {store['device']} device):\n" + "\n".join(lines)
+        return "No running applications found (or not supported on this platform)."
 
 
 class ListTabsTool(Tool):
@@ -219,6 +227,34 @@ class ListTabsTool(Tool):
 windows_tool = ListWindowsTool()
 apps_tool = ListAppsTool()
 tabs_tool = ListTabsTool()
+
+
+class DeviceAppsTool(Tool):
+    name = "list_device_apps"
+    description = (
+        "List applications reported by the user's current device (Android, iOS, "
+        "or any PC), as supplied by the client. Works on every platform — use "
+        "this when the user asks what apps they have or what's installed, even "
+        "when not on Windows."
+    )
+    parameters: dict = {}
+    required: list[str] = []
+
+    def run(self) -> str:
+        from core.device_apps import get_apps, has_apps
+
+        if not has_apps():
+            return (
+                "No device app list has been reported yet. The client reports "
+                "installed apps automatically; ask the user to open the app first "
+                "or note that app enumeration isn't available on this device."
+            )
+        store = get_apps()
+        lines = [str(a.get("name") if isinstance(a, dict) else a) for a in store["apps"]]
+        return f"Apps on your {store['device']} device:\n" + "\n".join(lines)
+
+
+device_apps_tool = DeviceAppsTool()
 
 
 # ---------------------------------------------------------------------------

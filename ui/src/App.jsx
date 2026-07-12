@@ -16,6 +16,7 @@ import GreetingOverlay from './components/GreetingOverlay'
 import { useNira } from './hooks/useNira'
 import { useVoice, speakNira, stopSpeech, enqueueNira } from './hooks/useVoice'
 import { apiFetch } from './api'
+import { reportDeviceApps } from './device'
 
 const NAME_KEY = 'nira_name'
 
@@ -58,6 +59,9 @@ export default function App() {
   useEffect(() => {
     const hideLoading = setTimeout(() => setLoading(false), 1400)
     const showWelcome = setTimeout(() => setShowGreeting(true), 1400)
+    // Report device type + any client-visible apps so "list apps" works on
+    // every platform (Android / iOS / PC), not just Windows.
+    reportDeviceApps()
     return () => { clearTimeout(hideLoading); clearTimeout(showWelcome) }
   }, [])
 

@@ -400,6 +400,36 @@ def desktop() -> dict:
     }
 
 
+class DeviceAppsRequest(BaseModel):
+    device: str = "unknown"          # android | ios | windows | macos | linux | web
+    apps: list = []                  # list of app names (or {name, ...} dicts)
+    source: str = "client"           # how the list was obtained
+
+
+@app.post("/device/apps")
+def device_apps(req: DeviceAppsRequest) -> dict:
+    """Receive an app list reported by any client device.
+
+    The Windows desktop tools can only enumerate apps locally. To make
+    "list apps / list installed apps" work on Android, iOS, and any
+    non-Windows PC, the client reports what it can see (device type + app
+    names) and the tools read from this shared store. No local enumeration
+    required on the server.
+    """
+    from core.device_apps import report_apps
+
+    report_apps(req.device, req.apps, req.source)
+    return {"ok": True, "device": req.device, "count": len(req.apps or [])}
+
+
+@app.get("/device/apps")
+def device_apps_get() -> dict:
+    """Return the latest device-reported app list (diagnostics)."""
+    from core.device_apps import get_apps
+
+    return {"ok": True, **get_apps()}
+
+
 class DesktopActionRequest(BaseModel):
     action: str  # "focus" | "close"
     kind: str  # "window" | "tab"

@@ -26,6 +26,7 @@ from tools.windows import (
     close_window_tool,
     focus_tab_tool,
     close_tab_tool,
+    device_apps_tool,
 )
 from tools.weather import weather_tool
 from tools.translate import translate_tool
@@ -67,6 +68,7 @@ ALL_TOOLS = [
     close_window_tool,
     focus_tab_tool,
     close_tab_tool,
+    device_apps_tool,
     # Search ecosystem
     web_search_tool,
     news_search_tool,
