@@ -11,15 +11,20 @@ import os
 import httpx
 
 from .base import Tool
+from core.oauth_store import get_access_token
 
 _GH_API = "https://api.github.com"
 
 
 def _headers() -> dict:
     headers = {"Accept": "application/vnd.github+json"}
-    token = os.getenv("GITHUB_TOKEN")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+    # 1) User-connected OAuth token (per-user, 5000/hr).
+    tok = get_access_token("github")
+    if tok:
+        headers["Authorization"] = f"Bearer {tok}"
+    # 2) Server env fallback (GITHUB_TOKEN in render.yaml).
+    elif (env_tok := (os.getenv("GITHUB_TOKEN") or "").strip()):
+        headers["Authorization"] = f"Bearer {env_tok}"
     return headers
 
 

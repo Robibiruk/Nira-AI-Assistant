@@ -1,12 +1,22 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, apiError } from '../api'
 
-const KNOWN = [
-  { name: 'ollama', base_url: 'http://localhost:11434/v1', hint: 'Local Ollama' },
-  { name: 'lmstudio', base_url: 'http://localhost:1234/v1', hint: 'Local LM Studio' },
-  { name: 'gemini', base_url: 'https://generativelanguage.googleapis.com/v1beta/openai/', hint: 'Google Gemini (OpenAI-compat)' },
-  { name: 'openai', base_url: 'https://api.openai.com/v1', hint: 'OpenAI' },
-  { name: 'zen', base_url: 'https://api.openai.com/v1', hint: 'zen (OpenAI-compat)' },
+// Services that support OAuth in the backend. Key-based / no-auth services
+// keep the manual key-input below and are not listed here.
+const OAUTH_SERVICES = [
+  { id: 'github', label: 'GitHub', desc: 'Repos, issues, user (per-user token)' },
+  { id: 'spotify', label: 'Spotify', desc: 'Music search + now playing' },
+]
+
+const KEY_SERVICES = [
+  { id: 'google', label: 'Google', hint: 'Google (Search, YouTube, Calendar, Gmail)' },
+  { id: 'translate', label: 'Translate', hint: 'Translate service (DeepL / Google Translate)' },
+  { id: 'wikipedia', label: 'Wikipedia', hint: 'Wikipedia (no auth needed)' },
+  { id: 'reddit', label: 'Reddit', hint: 'Reddit (OAuth coming soon — key for now)' },
+  { id: 'x', label: 'X.com', hint: 'X.com (Twitter) (OAuth coming soon — key for now)' },
+  { id: 'youtube', label: 'YouTube', hint: 'YouTube Data API' },
+  { id: 'email', label: 'Email', hint: 'Email (SMTP)' },
+  { id: 'clipboard', label: 'Clipboard', hint: 'Clipboard (local, no key)' },
 ]
 
 export default function SettingsPanel({ providers, custom, toolKeys = {}, onAdd, onRemove, onToolKey }) {
@@ -16,6 +26,51 @@ export default function SettingsPanel({ providers, custom, toolKeys = {}, onAdd,
   const [toolForm, setToolForm] = useState({ name: '', api_key: '' })
   const [toolMsg, setToolMsg] = useState('')
   const [toolBusy, setToolBusy] = useState(false)
+  // OAuth connection state per service.
+  const [oauth, setOauth] = useState({})
+  const [oauthBusy, setOauthBusy] = useState('')
+
+  const refreshOAuth = async () => {
+    try {
+      const r = await apiFetch('/auth/status')
+      if (r.ok && r.data) setOauth(r.data.connected || {})
+    } catch { /* ignore — UI falls back to disconnected */ }
+  }
+
+  useEffect(() => { refreshOAuth() }, [])
+
+  // Show a success toast if we returned from an OAuth callback (?connected=github)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const svc = params.get('connected')
+    if (svc) {
+      setMsg(`Connected to ${svc}.`)
+      window.history.replaceState({}, '', window.location.pathname + window.location.hash)
+      refreshOAuth()
+    }
+  }, [])
+
+  const connectOAuth = (id) => {
+    setOauthBusy(id)
+    // Full-page navigation to the provider login (then back via callback).
+    const base = import.meta.env.VITE_API_BASE && import.meta.env.VITE_API_BASE.replace(/\/+$/, '')
+    const url = base ? `${base}/auth/${id}/login` : `/auth/${id}/login`
+    window.location.href = url
+  }
+
+  const disconnectOAuth = async (id) => {
+    setOauthBusy(id)
+    try {
+      const r = await apiFetch(`/auth/${id}/disconnect`, { method: 'POST' })
+      if (!r.ok) throw new Error(apiError(r, 'disconnect failed'))
+      setOauth((o) => ({ ...o, [id]: false }))
+    } catch (err) {
+      setMsg('Error: ' + err.message)
+    } finally {
+      setOauthBusy('')
+    }
+  }
 
   const TOOL_HINTS = {
     google: 'Google (Search, YouTube, Calendar, Gmail)',
@@ -195,9 +250,40 @@ export default function SettingsPanel({ providers, custom, toolKeys = {}, onAdd,
       <div className="panel" style={{ flex: '0 0 auto' }}>
         <div className="panel-title">Tool Connections</div>
         <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: '0 0 12px' }}>
-          Connect external tools (Google, GitHub, Translate, YouTube, Spotify, …). Keys are stored locally in
-          config/tool_keys.json and never committed.
+          Connect services with OAuth (per-user, encrypted), or paste a key for key-based tools.
         </p>
+
+        {/* OAuth services: Connect / Disconnect */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {OAUTH_SERVICES.map((s) => {
+            const connected = !!oauth[s.id]
+            return (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--hairline-soft)', borderRadius: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, textTransform: 'capitalize' }}>{s.label}</div>
+                  <div style={{ fontSize: 11.5, color: connected ? 'var(--glow)' : 'var(--text-dim)' }}>
+                    {connected ? 'Connected' : 'Not connected'}
+                    <span style={{ color: 'var(--text-dim)' }}> · {s.desc}</span>
+                  </div>
+                </div>
+                {connected ? (
+                  <button className="btn-ghost" disabled={oauthBusy === s.id} onClick={() => disconnectOAuth(s.id)}>
+                    {oauthBusy === s.id ? '…' : 'Disconnect'}
+                  </button>
+                ) : (
+                  <button className="modal-btn" style={{ padding: '6px 14px' }} disabled={oauthBusy === s.id} onClick={() => connectOAuth(s.id)}>
+                    {oauthBusy === s.id ? 'Redirecting…' : 'Connect'}
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Key-based services: keep the manual key input */}
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          Key-based tools
+        </div>
         {Object.keys(toolKeys).length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
             {Object.entries(toolKeys).map(([name, info]) => (
@@ -205,7 +291,7 @@ export default function SettingsPanel({ providers, custom, toolKeys = {}, onAdd,
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, textTransform: 'capitalize' }}>{name}</div>
                   <div style={{ fontSize: 11.5, color: info.configured ? 'var(--glow)' : 'var(--text-dim)' }}>
-                    {info.configured ? 'Connected' : 'Not configured'}
+                    {info.configured ? 'Configured' : 'Not configured'}
                   </div>
                 </div>
                 <button className="btn-ghost" onClick={() => removeTool(name)}>Remove</button>
@@ -215,21 +301,21 @@ export default function SettingsPanel({ providers, custom, toolKeys = {}, onAdd,
         )}
         <form onSubmit={submitTool} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {Object.entries(TOOL_HINTS).map(([id, hint]) => (
+            {KEY_SERVICES.map((k) => (
               <button
                 type="button"
-                key={id}
+                key={k.id}
                 className="btn-ghost"
-                onClick={() => setToolForm((f) => ({ ...f, name: id }))}
-                title={hint}
+                onClick={() => setToolForm((f) => ({ ...f, name: k.id }))}
+                title={k.hint}
               >
-                + {id}
+                + {k.id}
               </button>
             ))}
           </div>
           <input
             className="modal-input"
-            placeholder="Tool name (e.g. google, github, youtube)"
+            placeholder="Tool name (e.g. google, youtube)"
             value={toolForm.name}
             onChange={(e) => setToolForm((f) => ({ ...f, name: e.target.value }))}
           />

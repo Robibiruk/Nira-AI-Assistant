@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -28,10 +29,13 @@ from speech.tts import speak_onnx
 from core import runtime
 from core.assistant import Assistant
 from core import router as tool_router
+from core.oauth import router as oauth_router
 
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="NIRA", version="0.3.1")
+
+app.include_router(oauth_router)
 
 # CORS: allow the deployed Vercel frontend (and local dev) to call this API.
 # Locked to known origins so we don't open the API to any site.
@@ -41,6 +45,8 @@ _ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    # Custom production frontend domain (if set via env).
+    (os.getenv("WEB_ORIGIN") or "").rstrip("/"),
 ]
 app.add_middleware(
     CORSMiddleware,

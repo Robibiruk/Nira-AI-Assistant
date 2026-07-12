@@ -62,11 +62,17 @@ def _client_credentials_token() -> str | None:
 
 
 def _resolve_token() -> str:
-    # 1) Manually-pasted token (env SPOTIFY_API_KEY or UI Tool Connection).
+    # 1) User-connected OAuth token (per-user, survives the Connect flow).
+    from core.oauth_store import get_access_token
+
+    tok = get_access_token("spotify")
+    if tok:
+        return tok
+    # 2) Manually-pasted token (env SPOTIFY_API_KEY or UI Tool Connection).
     tok = (get_tool_key("spotify") or "").strip()
     if tok:
         return tok
-    # 2) Auto-fetched via Client Credentials (env CLIENT_ID/SECRET).
+    # 3) Auto-fetched via Client Credentials (env CLIENT_ID/SECRET).
     return _client_credentials_token() or ""
 
 
