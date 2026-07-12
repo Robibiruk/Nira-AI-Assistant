@@ -92,12 +92,17 @@ _store_error = None  # populated on connection failure for diagnostics
 
 
 def _collection():
-    global _client, _db, _store_ready
-    if _store_ready:
-        return _db[_COLLECTION] if _db is not None else None
+    global _client, _db, _store_ready, _store_error
+    # Only treat a *successful* connection as permanently cached. A failed
+    # attempt must be retried on the next call, otherwise a failure during the
+    # first request (e.g. env var not yet present at container start) would be
+    # cached forever and the store would stay unavailable even after the var
+    # is set.
+    if _store_ready and _db is not None:
+        return _db[_COLLECTION]
     with _lock:
-        if _store_ready:
-            return _db[_COLLECTION] if _db is not None else None
+        if _store_ready and _db is not None:
+            return _db[_COLLECTION]
         uri = (os.getenv("MONGODB_URI") or "").strip()
         if pymongo and uri:
             try:
@@ -114,6 +119,7 @@ def _collection():
                     unique=True,
                     name="user_service_unique",
                 )
+                _store_error = None
             except Exception as _exc:  # keep the reason for diagnostics
                 _client = None
                 _db = None
@@ -122,7 +128,9 @@ def _collection():
                 )
         else:
             _store_error = "MONGODB_URI is not set in the backend environment."
-        _store_ready = True
+        # Mark ready ONLY when we actually connected; otherwise leave it False
+        # so the next call retries (e.g. after the env var is set/redployed).
+        _store_ready = _db is not None
         return _db[_COLLECTION] if _db is not None else None
 
 
