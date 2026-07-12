@@ -1,0 +1,42 @@
+# Render deploy config for the Nira AI backend (FastAPI).
+# Dashboard alternative: New Web Service -> connect repo -> Runtime: Docker.
+# This file lets you deploy with one click ("Deploy to Render").
+
+services:
+  - type: web
+    name: nira-ai-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Use the Dockerfile above (it fetches the Kokoro/Piper TTS weights via LFS).
+    plan: free            # upgrade to a paid plan for always-on + snappier voice
+    region: oregon        # pick the region nearest your users
+    branch: main
+    healthCheckPath: /health
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false        # Render will prompt you to enter the secret
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TOGETHER_API_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: NCBI_API_KEY
+        sync: false
+      - key: JARVIS_KOKORO_VOICE
+        value: bm_george
+      - key: JARVIS_KOKORO_LANG
+        value: en-gb
+      - key: JARVIS_KOKORO_SPEED
+        value: "1.0"
+      # PORT is auto-injected by Render; do not hardcode it.

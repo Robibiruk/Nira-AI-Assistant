@@ -1,0 +1,34 @@
+# Build context is the repo root; keep the image lean.
+node_modules
+ui/node_modules
+
+# Frontend build output (Vercel builds this separately)
+ui/dist
+
+# Local data / secrets
+*.db
+*.sqlite
+.env
+config/settings.yaml
+config/custom_providers.json
+config/tool_keys.json
+config/features.json
+
+# Large model weights are pulled at build via git lfs; don't copy from host
+kokoro-voice/kokoro-v1.0.onnx
+kokoro-voice/voices-v1.0.bin
+nira-voice/nira-high.onnx
+
+# Python cruft
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel/
