@@ -18,6 +18,7 @@ import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
@@ -32,6 +33,23 @@ from core import router as tool_router
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="NIRA", version="0.3.1")
+
+# CORS: allow the deployed Vercel frontend (and local dev) to call this API.
+# Locked to known origins so we don't open the API to any site.
+_ALLOWED_ORIGINS = [
+    "https://nira-ai-assistant.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")
