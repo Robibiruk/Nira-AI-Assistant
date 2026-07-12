@@ -87,7 +87,7 @@
   .na-fixed-row { flex-direction: column; flex-wrap: nowrap; }
   .na-fixed-box, .na-fixed-box--sm { max-width: 100%; width: 100%; }
 }
-@media (max-width: 730px) {
+@media (max-width: 740px) {
   .na-license__cards { grid-template-columns: 1fr; }
 }
 
