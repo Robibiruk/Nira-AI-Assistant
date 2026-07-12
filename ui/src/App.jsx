@@ -213,7 +213,7 @@ export default function App() {
     },
   })
 
-  const { messages, coreState, activeTool, status, tools, models, currentModel, selectModel, greet, sendMessage } = nira
+  const { messages, coreState, activeTool, status, tools, models, currentModel, selectModel, refreshModels, greet, sendMessage } = nira
   const messagesRef = useRef(messages)
   messagesRef.current = messages
 
