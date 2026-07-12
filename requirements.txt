@@ -7,8 +7,14 @@ pyyaml>=6.0
 # Windows desktop awareness (open windows / running apps / browser tabs)
 psutil>=5.9
 pywin32>=306; sys_platform == "win32"
-# TTS: natural Kokoro voice (primary) + Piper fallback (robotic)
+# Screen capture + image handling (screenshots, window thumbnails)
+mss>=9.0
+pillow>=10.0
+# Symbolic math (calculator tool)
+sympy>=1.12
+# TTS: natural Kokoro voice (primary) + Piper fallback (robust)
 kokoro-onnx>=0.4
 soundfile>=0.13
 piper-tts>=1.4
 onnxruntime>=1.17
+numpy>=1.24
