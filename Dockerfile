@@ -15,6 +15,13 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git git-lfs ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
+# Queue LFS downloads and limit parallelism so `git lfs pull` doesn't fork
+# many transfers at once (each can spike RAM and OOM the build on small tiers).
+ENV GIT_LFS_PROCESS_QUEUED=1
+ENV GIT_LFS_MAX_PROCESSES=2
+# Unbuffer Python so OOM / startup errors surface in the deploy log immediately.
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 # Clone the public repo WITH Git LFS so the model weights are real files.

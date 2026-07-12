@@ -528,6 +528,24 @@ def speak(req: ChatRequest) -> "Response | dict":
             "nira-voice/ contain the real model files (not LFS pointer stubs)."
         }
 
+    # Memory guard: on the 512MB Render free tier, refuse to load the 325MB
+    # Kokoro model if we're already tight, so we return a clean error instead
+    # of OOM-killing the whole process. (Linux-only; no-op elsewhere.)
+    try:
+        import os
+
+        if tts_kokoro.available():
+            with open("/proc/self/statm") as fh:
+                rss_pages = int(fh.read().split()[1])
+            rss_mb = rss_pages * os.sysconf("SC_PAGE_SIZE") / (1024 * 1024)
+            if rss_mb > 360:  # ~150MB headroom under the 512MB ceiling
+                return {
+                    "error": "Server memory is too low to load the TTS model "
+                    "right now. Try again shortly, or upgrade the instance RAM."
+                }
+    except (OSError, ValueError, IndexError):
+        pass
+
     wav = speak_onnx(req.message)
     if wav is None:
         return {"error": "TTS generation failed for this text."}

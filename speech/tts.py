@@ -30,12 +30,16 @@ def speak_onnx(text: str, scales: list[float] | None = None) -> bytes | None:
 
     Returns None only if no engine can produce audio.
     """
-    # Prefer Kokoro for the natural voice.
+    # Prefer Kokoro for the natural voice. When Kokoro is available we do NOT
+    # also pre-load Piper — on the 512MB Render free tier holding both the
+    # 325MB Kokoro and 114MB Piper models resident at once is what triggers
+    # an OOM kill. Kokoro alone is the voice; Piper is only a fallback for
+    # when Kokoro weights are absent.
     if _kokoro is not None and _kokoro.available():
         wav = _kokoro.speak(text)
         if wav:
             return wav
-    # Fallback to Piper.
+    # Fallback to Piper (only reached if Kokoro is missing).
     if _onnx_speak is not None:
         return _onnx_speak(text, scales)
     return None

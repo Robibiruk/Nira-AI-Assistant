@@ -17,6 +17,7 @@ import os
 import struct
 import wave
 from pathlib import Path
+import threading
 
 import numpy as np
 
@@ -29,6 +30,10 @@ DEFAULT_VOICE = os.environ.get("JARVIS_KOKORO_VOICE", "bm_george")
 DEFAULT_LANG = os.environ.get("JARVIS_KOKORO_LANG", "en-gb")
 DEFAULT_SPEED = float(os.environ.get("JARVIS_KOKORO_SPEED", "1.0"))
 
+# Guard the lazy load so concurrent /speak requests can't instantiate the
+# 325MB Kokoro model twice (that second copy is what blows the 512MB
+# Render free-tier ceiling and triggers an OOM kill).
+_load_lock = threading.Lock()
 _kokoro = None
 
 
@@ -45,9 +50,24 @@ def _ensure_loaded():
             f"Kokoro model files not found in {MODEL_DIR}. "
             "Expected kokoro-v1.0.onnx and voices-v1.0.bin."
         )
-    from kokoro_onnx import Kokoro
+    # Serialize model construction; only the first caller builds it.
+    with _load_lock:
+        if _kokoro is not None:
+            return
+        from kokoro_onnx import Kokoro
 
-    _kokoro = Kokoro(str(ONNX_PATH), str(VOICES_PATH))
+        # Cap ONNX threads so a single session uses less working RAM —
+        # important on the 512MB Render free tier.
+        try:
+            import onnxruntime as ort
+
+            so = ort.SessionOptions()
+            so.intra_op_num_threads = 2
+            so.inter_op_num_threads = 1
+            _kokoro = Kokoro(str(ONNX_PATH), str(VOICES_PATH), session_options=so)
+        except TypeError:
+            # Older kokoro_onnx doesn't accept session_options; load plain.
+            _kokoro = Kokoro(str(ONNX_PATH), str(VOICES_PATH))
 
 
 def _pcm16_wav(samples: np.ndarray, sample_rate: int) -> bytes:
