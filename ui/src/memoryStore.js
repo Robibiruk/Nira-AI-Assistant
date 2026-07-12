@@ -93,3 +93,22 @@ export function lsDeleteProject(pid) {
 export function lsListProjects() {
   return Object.values(lsGetProjects()).sort((a, b) => (b.updated || 0) - (a.updated || 0))
 }
+
+// ---- Selected model + custom providers (survive reload + backend wipe) ----
+const MKEY = 'nira_model'
+const CKEY = 'nira_custom_providers'
+
+export function lsGetModel() {
+  return localStorage.getItem(MKEY) || ''
+}
+export function lsSetModel(id) {
+  if (id) localStorage.setItem(MKEY, id)
+  else localStorage.removeItem(MKEY)
+}
+
+export function lsGetCustom() {
+  return readJSON(CKEY, [])
+}
+export function lsSetCustom(list) {
+  writeJSON(CKEY, list || [])
+}

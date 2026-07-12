@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiFetch, apiUrl } from '../api'
 import { SLASH_COMMANDS, parseSlash } from '../slash'
 import { loadName } from '../firebase'
+import { lsGetModel, lsSetModel } from '../memoryStore'
 
 // Tool catalogue shown in the side panel. `id` must match the tool name the
 // backend reports in tool_result/executing events so the active highlight works.
@@ -69,7 +70,11 @@ export function useNira(sessionId = 'web', options = {}) {
         return true
       })
       setModels(unique)
-      if (r.data.current) setCurrentModel(r.data.current)
+      // Prefer the locally-persisted selection (survives reload); fall back
+      // to whatever the backend reports as current.
+      const saved = lsGetModel()
+      if (saved && unique.some((m) => m.id === saved)) setCurrentModel(saved)
+      else if (r.data.current) setCurrentModel(r.data.current)
     })
   }, [])
 
@@ -81,6 +86,7 @@ export function useNira(sessionId = 'web', options = {}) {
       })
       if (r.ok && r.data) {
         setCurrentModel(r.data.current)
+        lsSetModel(r.data.current)
         setStatus((s) => ({ ...s, model: r.data.current }))
       }
     } catch {
@@ -100,7 +106,10 @@ export function useNira(sessionId = 'web', options = {}) {
         return true
       })
       setModels(unique)
-      if (r.data.current) setCurrentModel(r.data.current)
+      if (r.data.current) {
+        setCurrentModel(r.data.current)
+        lsSetModel(r.data.current)
+      }
     } catch {
       /* ignore */
     }
@@ -130,12 +139,14 @@ export function useNira(sessionId = 'web', options = {}) {
           case 'meta':
             if (ev.model) {
               setCurrentModel(ev.model)
+              lsSetModel(ev.model)
               setStatus((s) => ({ ...s, model: ev.model }))
             }
             break
           case 'model_switch':
             if (ev.to) {
               setCurrentModel(ev.to)
+              lsSetModel(ev.to)
               setStatus((s) => ({ ...s, model: ev.to }))
               onModelSwitchRef.current?.(ev.to)
             }

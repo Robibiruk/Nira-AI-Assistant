@@ -42,6 +42,10 @@ import {
   lsSaveProject,
   lsDeleteProject,
   lsGetSessionsSafe,
+  lsGetModel,
+  lsSetModel,
+  lsGetCustom,
+  lsSetCustom,
 } from './memoryStore'
 
 function uuid() {
@@ -80,7 +84,7 @@ export default function App() {
   const [activityOpen, setActivityOpen] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [providersInfo, setProvidersInfo] = useState({ configured: [], active: [] })
-  const [custom, setCustom] = useState([])
+  const [custom, setCustom] = useState(() => lsGetCustom())
   const [toolKeys, setToolKeys] = useState({})
   const [features, setFeatures] = useState({})
   const [sessionId, setSessionIdState] = useState(() => `web-${uuid()}`)
@@ -111,6 +115,27 @@ export default function App() {
       if (local) nira.loadMessages(local.messages || [])
     }
 
+    // 1b) Re-sync custom providers to the backend (in case Render wiped
+    //     config/custom_providers.json on restart), then refresh the model
+    //     list so custom models appear in the picker. localStorage is the
+    //     source of truth; the backend is rebuilt from it.
+    const localCustom = lsGetCustom()
+    if (localCustom.length) {
+      apiFetch('/providers/custom').then((r) => {
+        const remote = (r.ok && r.data && r.data.custom) || []
+        if (remote.length === 0) {
+          resyncCustomToBackend(localCustom).then(() => {
+            lsSetCustom(localCustom)
+            setCustom(localCustom)
+            nira.refreshModels()
+          })
+        } else {
+          lsSetCustom(remote)
+          setCustom(remote)
+        }
+      }).catch(() => {})
+    }
+
     // 2) Background Firebase sync (best-effort; never blocks the UI).
     authReady()
       .then((u) => (u ? u : signInAnon()))
@@ -128,7 +153,39 @@ export default function App() {
 
   const refreshProviders = () => {
     apiFetch('/providers').then((r) => r.ok && setProvidersInfo(r.data || {}))
-    apiFetch('/providers/custom').then((r) => r.ok && setCustom((r.data && r.data.custom) || []))
+    apiFetch('/providers/custom').then((r) => {
+      if (!r.ok) return
+      const remote = (r.data && r.data.custom) || []
+      const local = lsGetCustom()
+      // If the backend lost its custom providers (e.g. Render disk wipe on
+      // restart), re-sync from localStorage. Otherwise keep the backend list.
+      if (remote.length === 0 && local.length > 0) {
+        resyncCustomToBackend(local).then(() => setCustom(local))
+      } else {
+        if (remote.length) lsSetCustom(remote)
+        setCustom(remote)
+      }
+    })
+  }
+
+  // Push locally-saved custom providers back to the backend (idempotent:
+  // the backend dedupes by name). Used when the backend's disk was reset.
+  const resyncCustomToBackend = async (list) => {
+    for (const c of list) {
+      try {
+        await apiFetch('/providers/custom', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: c.name,
+            base_url: c.base_url,
+            api_key: c.api_key || '',
+            models: c.models || [],
+          }),
+        })
+      } catch {
+        /* ignore */
+      }
+    }
   }
   const refreshToolKeys = () => {
     apiFetch('/tools/keys').then((r) => r.ok && setToolKeys((r.data && r.data.keys) || {}))
