@@ -1,76 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 // NIRA's voice is produced CLIENT-SIDE (no large server model, so the
-// backend never OOMs on cold start). Primary engine is ResponsiveVoice's
-// free "UK English Male" — a natural British male voice, loaded from a
-// tiny CDN script in index.html. If ResponsiveVoice isn't available we
-// fall back to the browser's Web Speech API with an en-GB voice.
+// backend never OOMs on cold start). We use the BROWSER'S Web Speech API
+// (keyless, no external script, no console errors) with an explicit
+// en-GB / male English voice when available.
 //
 // Only ONE line plays at a time. We track the in-flight engine and stop it
 // before starting a new one. Sentences are synthesised sequentially so a
 // streamed reply flows naturally without a robot pause after every word.
 
-let _currentAudio = null
 let _currentUtterance = null
 
 // Sequential speech queue: streamed sentences play one after another.
 let _speechQueue = []
 let _speechPlaying = false
 
-let _rvReady = typeof window !== 'undefined' && !!window.responsiveVoice
-
-// Poll briefly for ResponsiveVoice (it loads async from the CDN).
-if (typeof window !== 'undefined' && window.responsiveVoice === undefined) {
-  let tries = 0
-  const t = setInterval(() => {
-    tries += 1
-    if (window.responsiveVoice) {
-      _rvReady = true
-      clearInterval(t)
-    } else if (tries > 40) {
-      clearInterval(t)
-    }
-  }, 150)
-}
-
 function _stopCurrentSpeech() {
-  if (typeof window !== 'undefined' && window.responsiveVoice && window.responsiveVoice.isPlaying && window.responsiveVoice.isPlaying()) {
-    try { window.responsiveVoice.cancel() } catch { /* ignore */ }
-  }
-  if (_currentAudio) {
-    try {
-      _currentAudio.pause()
-      _currentAudio.onended = null
-      _currentAudio.onerror = null
-      if (_currentAudio.src) URL.revokeObjectURL(_currentAudio.src)
-    } catch { /* ignore */ }
-    _currentAudio = null
-  }
   if (typeof window !== 'undefined' && window.speechSynthesis) {
     try { window.speechSynthesis.cancel() } catch { /* ignore */ }
   }
   _currentUtterance = null
-}
-
-function _playResponsiveVoice(text) {
-  return new Promise((resolve) => {
-    if (!_rvReady || !window.responsiveVoice) {
-      resolve(false) // signal: engine not available, caller falls back
-      return
-    }
-    let settled = false
-    const finish = () => { if (!settled) { settled = true; resolve(true) } }
-    try {
-      window.responsiveVoice.speak(text, 'UK English Male', {
-        onend: finish,
-        onerror: finish,
-        rate: 1.0,
-        pitch: 0.9,
-      })
-    } catch {
-      finish()
-    }
-  })
 }
 
 function _playBrowserTTS(text) {
@@ -95,12 +44,9 @@ function _playBrowserTTS(text) {
   })
 }
 
-// Play one sentence: ResponsiveVoice (British male) -> browser en-GB fallback.
+// Play one sentence via the browser TTS.
 function _playText(text) {
-  return _playResponsiveVoice(text).then((ok) => {
-    if (ok) return true
-    return _playBrowserTTS(text)
-  })
+  return _playBrowserTTS(text)
 }
 
 function _advanceQueue() {

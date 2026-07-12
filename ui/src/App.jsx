@@ -41,6 +41,7 @@ import {
   lsListProjects,
   lsSaveProject,
   lsDeleteProject,
+  lsGetSessionsSafe,
 } from './memoryStore'
 
 function uuid() {
