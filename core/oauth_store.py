@@ -88,6 +88,7 @@ def _decrypt(blob: str) -> str:
 _client = None
 _db = None
 _store_ready = False
+_store_error = None  # populated on connection failure for diagnostics
 
 
 def _collection():
@@ -113,12 +114,14 @@ def _collection():
                     unique=True,
                     name="user_service_unique",
                 )
-            except Exception:
+            except Exception as _exc:  # keep the reason for diagnostics
                 _client = None
                 _db = None
+                _store_error = (
+                    "MongoDB connection failed: " + type(_exc).__name__ + " - " + str(_exc)[:200]
+                )
         else:
-            _client = None
-            _db = None
+            _store_error = "MONGODB_URI is not set in the backend environment."
         _store_ready = True
         return _db[_COLLECTION] if _db is not None else None
 
@@ -188,6 +191,17 @@ def delete_token(service: str) -> None:
     if col is None:
         return
     col.delete_one({"user_id": USER_ID, "service": service})
+
+
+def storage_health() -> dict:
+    """Diagnostics for the OAuth token store (no secrets)."""
+    col = _collection()
+    return {
+        "available": col is not None,
+        "error": _store_error,
+        "db": (_db.name if _db is not None else None),
+        "collection": _COLLECTION,
+    }
 
 
 def is_connected(service: str) -> bool:

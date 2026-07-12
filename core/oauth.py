@@ -142,6 +142,13 @@ def oauth_status() -> dict:
     return {"connected": store.list_status(list(SERVICES.keys()))}
 
 
+@router.get("/storage")
+def oauth_storage() -> dict:
+    """Diagnostics: is the OAuth token store reachable? Surfaces the real
+    failure reason (missing var vs. connection error) without secrets."""
+    return store.storage_health()
+
+
 @router.get("/{service}/login")
 def oauth_login(service: str, response: Response, req: Request) -> RedirectResponse:
     cfg = _service_cfg(service)
