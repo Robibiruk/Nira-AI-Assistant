@@ -6,6 +6,7 @@ import {
   AtSign, Video, MessagesSquare, Newspaper, FileText, ChevronRight, Star, Check, Circle, Heart,
 } from 'lucide-react'
 import Favicon from './Favicon'
+import FeedbackForm from './FeedbackForm'
 import './about.css'
 
 // ---- Animated count-up (gradient numbers) ----
@@ -323,6 +324,11 @@ export default function AboutPage() {
               </div>
             </div>
           </section>
+        </Reveal>
+
+        {/* Feedback & Contact (full) — Formspree, before footer */}
+        <Reveal className="na-col-12">
+          <FeedbackForm />
         </Reveal>
 
         {/* Footer (full) */}

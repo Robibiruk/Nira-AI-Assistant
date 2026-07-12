@@ -431,6 +431,91 @@
 /* Footer: small, sits in the bottom-right row */
 .na-favicon--orb { width: 52px; flex: 0 0 auto; }
 
+/* ============================================================
+   Feedback & Contact (Formspree) — dark-neon, matches the page
+   ============================================================ */
+.na-feedback { padding: 28px 32px; }
+.na-feedback__head { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
+.na-feedback__icon {
+  display: grid; place-items: center;
+  width: 52px; height: 52px; flex: 0 0 auto;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.16), rgba(168, 85, 247, 0.16));
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  color: var(--cyan, #00d4ff);
+  box-shadow: 0 0 22px rgba(0, 212, 255, 0.18);
+}
+.na-feedback__sub { color: rgba(228, 240, 255, 0.66); margin: 4px 0 0; font-size: 0.95rem; }
+
+.na-feedback__form { display: flex; flex-direction: column; gap: 16px; }
+.na-feedback__row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.na-field { display: flex; flex-direction: column; gap: 7px; }
+.na-field__label {
+  font-size: 0.82rem; font-weight: 600; letter-spacing: 0.02em;
+  color: rgba(228, 240, 255, 0.78);
+}
+.na-field input,
+.na-field select,
+.na-field textarea {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: #e8f3ff;
+  background: rgba(8, 18, 33, 0.7);
+  border: 1px solid rgba(120, 160, 200, 0.22);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+.na-field textarea { resize: vertical; min-height: 120px; }
+.na-field input::placeholder,
+.na-field textarea::placeholder { color: rgba(160, 185, 210, 0.45); }
+.na-field input:focus,
+.na-field select:focus,
+.na-field textarea:focus {
+  border-color: rgba(0, 212, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.14);
+  background: rgba(10, 22, 40, 0.85);
+}
+.na-field select { appearance: none; cursor: pointer; }
+.na-field__err { color: #ff7a8a; font-size: 0.8rem; margin-top: 2px; }
+
+.na-btn--send {
+  align-self: flex-start;
+  margin-top: 4px;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 22px;
+  font-size: 0.95rem; font-weight: 600;
+  color: #021018;
+  background: linear-gradient(135deg, #00d4ff, #22e0ff);
+  border: none; border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 6px 22px rgba(0, 212, 255, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.na-btn--send:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0, 212, 255, 0.5); }
+.na-btn--send:disabled { opacity: 0.6; cursor: not-allowed; }
+.na-spin { animation: na-spin 0.9s linear infinite; }
+@keyframes na-spin { to { transform: rotate(360deg); } }
+
+/* Success state */
+.na-feedback--done { text-align: center; padding: 48px 32px; }
+.na-feedback__icon--done {
+  width: 64px; height: 64px; margin: 0 auto 18px;
+  color: #3ee6a0;
+  border-color: rgba(62, 230, 160, 0.4);
+  background: linear-gradient(135deg, rgba(62, 230, 160, 0.16), rgba(0, 212, 255, 0.12));
+  box-shadow: 0 0 26px rgba(62, 230, 160, 0.25);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .na-favicon { filter: drop-shadow(0 0 14px rgba(0, 212, 255, 0.4)); }
+  .na-spin { animation: none; }
+}
+
+@media (max-width: 560px) {
+  .na-feedback { padding: 22px 20px; }
+  .na-feedback__row { grid-template-columns: 1fr; }
 }

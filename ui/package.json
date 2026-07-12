@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@formspree/react": "^3.0.0",
     "@gsap/react": "^2.1.2",
     "@lottiefiles/dotlottie-react": "^0.19.9",
     "firebase": "^12.16.0",
