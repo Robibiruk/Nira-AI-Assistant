@@ -50,6 +50,7 @@ export function useNira(sessionId = 'web', options = {}) {
   const onModelSwitchRef = useRef(onModelSwitch)
   const onReplyRef = useRef(onReply)
   const onTextRef = useRef(onText)
+  const _openUrlCount = useRef(0)
   onModelSwitchRef.current = onModelSwitch
   onReplyRef.current = onReply
   onTextRef.current = onText
@@ -183,7 +184,23 @@ export function useNira(sessionId = 'web', options = {}) {
               ...m,
               { role: 'tool', tool: ev.tool, content: ev.output },
             ])
+            _openUrlCount.current = 0
             break
+          case 'open_url': {
+            // Open URLs in the USER'S browser (the server is headless).
+            // Only open the first link per tool result to avoid spawning a
+            // tab for every search hit.
+            _openUrlCount.current += 1
+            if (_openUrlCount.current === 1 && ev.url && typeof window !== 'undefined') {
+              try {
+                const w = window.open(ev.url, '_blank', 'noopener,noreferrer')
+                if (!w) window.location.href = ev.url
+              } catch {
+                /* ignore */
+              }
+            }
+            break
+          }
           case 'message':
             // Final full message (also covers non-streaming replies).
             setMessages((m) => {

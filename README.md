@@ -251,6 +251,9 @@ tools:
 |----------|-------------|---------|
 | `OPENROUTER_API_KEY` | OpenRouter API key (required) | — |
 | `TAVILY_API_KEY` | Tavily web-search key (optional; env wins over config) | — |
+| `SPOTIFY_CLIENT_ID` | Spotify app Client ID — enables automatic token fetch (Client Credentials) so Spotify works without manual tokens and survives restarts | — |
+| `SPOTIFY_CLIENT_SECRET` | Spotify app Client Secret (paired with `SPOTIFY_CLIENT_ID`) | — |
+| `SPOTIFY_API_KEY` | Optional: a manually-pasted Spotify access token (overrides the above). Short-lived — refresh when requests 401 | — |
 | `UVICORN_HOST` | FastAPI host | 127.0.0.1 |
 | `UVICORN_PORT` | FastAPI port | 8000 |
 

@@ -37,10 +37,9 @@ class OpenBrowserTool(Tool):
         target = url or "https://www.google.com"
         ctrl = _controller()
         if ctrl is None:
-            return (
-                "A web browser is not available in this environment (no runnable "
-                f"browser found). To open it yourself, visit: {target}"
-            )
+            # Headless server (Render/CI): the frontend opens the URL in the
+            # user's actual browser via the `open_url` event.
+            return f"OPEN_URL::{target}"
         ctrl.open(target)
         return f"Opened browser at {target}"
 

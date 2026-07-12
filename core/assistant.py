@@ -17,6 +17,27 @@ from typing import Any, Iterator
 
 from loguru import logger
 
+# URLs that surface in tool outputs (search results, Spotify links, browser
+# tool, etc.). The frontend opens these in the USER'S browser (the server is
+# headless on Render and cannot open a window itself).
+import re
+
+_URL_RE = re.compile(r'(?:OPEN_URL::)?https?://[^\s)<>\]]+')
+
+
+def _extract_urls(text):
+    if not text:
+        return []
+    seen = set()
+    out = []
+    for m in _URL_RE.finditer(text):
+        u = m.group(0).rstrip('.,;')
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
+
+
 from ai.provider import MultiProviderClient, ProviderError
 from config import TEMPERATURE
 from core import runtime
@@ -222,6 +243,11 @@ class Assistant:
                 yield {"type": "state", "state": "executing", "tool": name}
                 output = execute(name, args)
                 yield {"type": "tool_result", "tool": name, "output": output}
+                # Surface any URLs in the result so the FRONTEND can open them
+                # in the user's own browser (the server has no display and
+                # cannot launch a window — e.g. Render).
+                for u in _extract_urls(output):
+                    yield {"type": "open_url", "url": u, "tool": name}
                 messages.append(
                     {
                         "role": "tool",
