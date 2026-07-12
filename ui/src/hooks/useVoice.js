@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-// Shared: render text with the server-side NIRA voice (nira-voice ONNX
-// model at /speak) and play it. Used by the greeting flows AND useVoice.speak
-// so EVERY spoken line uses NIRA — never the browser's default voice.
+// NIRA's voice is produced CLIENT-SIDE (no large server model, so the
+// backend never OOMs on cold start). Primary engine is ResponsiveVoice's
+// free "UK English Male" — a natural British male voice, loaded from a
+// tiny CDN script in index.html. If ResponsiveVoice isn't available we
+// fall back to the browser's Web Speech API with an en-GB voice.
 //
-// Only ONE line plays at a time. We track the in-flight server Audio element
-// and the browser speech instance, and stop whichever is current before
-// starting a new one. To keep latency low, callers stream replies
-// sentence-by-sentence via enqueueNira(), which plays them back-to-back
-// (no overlap, no per-sentence rebuild) instead of waiting for the whole
-// reply to be generated before the first sound.
-
-import { apiUrl } from '../api'
+// Only ONE line plays at a time. We track the in-flight engine and stop it
+// before starting a new one. Sentences are synthesised sequentially so a
+// streamed reply flows naturally without a robot pause after every word.
 
 let _currentAudio = null
 let _currentUtterance = null
@@ -20,116 +17,90 @@ let _currentUtterance = null
 let _speechQueue = []
 let _speechPlaying = false
 
+let _rvReady = typeof window !== 'undefined' && !!window.responsiveVoice
+
+// Poll briefly for ResponsiveVoice (it loads async from the CDN).
+if (typeof window !== 'undefined' && window.responsiveVoice === undefined) {
+  let tries = 0
+  const t = setInterval(() => {
+    tries += 1
+    if (window.responsiveVoice) {
+      _rvReady = true
+      clearInterval(t)
+    } else if (tries > 40) {
+      clearInterval(t)
+    }
+  }, 150)
+}
+
 function _stopCurrentSpeech() {
+  if (typeof window !== 'undefined' && window.responsiveVoice && window.responsiveVoice.isPlaying && window.responsiveVoice.isPlaying()) {
+    try { window.responsiveVoice.cancel() } catch { /* ignore */ }
+  }
   if (_currentAudio) {
     try {
       _currentAudio.pause()
       _currentAudio.onended = null
       _currentAudio.onerror = null
-      URL.revokeObjectURL(_currentAudio.src)
-    } catch {
-      /* ignore */
-    }
+      if (_currentAudio.src) URL.revokeObjectURL(_currentAudio.src)
+    } catch { /* ignore */ }
     _currentAudio = null
   }
   if (typeof window !== 'undefined' && window.speechSynthesis) {
-    try {
-      window.speechSynthesis.cancel()
-    } catch {
-      /* ignore */
-    }
+    try { window.speechSynthesis.cancel() } catch { /* ignore */ }
   }
   _currentUtterance = null
 }
 
-// Cache of pre-fetched audio blobs, keyed by sentence text, so the next
-// sentence is already synthesized and ready to play the instant the current
-// one ends (removes the inter-sentence round-trip gap).
-let _audioCache = new Map()
-
-// Serialized /speak chain. Kokoro runs on a single worker; firing two /speak
-// requests at once overloads it and one request fails — and the browser-TTS
-// fallback's speechSynthesis.cancel() then KILLS the in-flight utterance,
-// dropping words. Serializing every /speak call avoids that entirely.
-let _speakChain = Promise.resolve()
-
-function _fetchSpeechBlob(text) {
-  _speakChain = _speakChain
-    .then(() =>
-      fetch(apiUrl('/speak'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
-      }).then((res) => {
-        const ct = res.headers.get('content-type') || ''
-        if (!res.ok || !ct.includes('audio')) throw new Error('no audio')
-        return res.blob()
-      }),
-    )
-    .catch((e) => {
-      // Surface as a thrown value so the caller can fall back to browser TTS
-      // for THIS sentence only — without cancelling anything already playing.
-      throw e
-    })
-  return _speakChain
-}
-
-function _playBlob(blob) {
+function _playResponsiveVoice(text) {
   return new Promise((resolve) => {
-    const url = URL.createObjectURL(blob)
-    const audio = new Audio(url)
-    _currentAudio = audio
-    let settled = false
-    const finish = () => {
-      if (settled) return
-      settled = true
-      if (_currentAudio === audio) {
-        URL.revokeObjectURL(url)
-        _currentAudio = null
-      }
-      resolve()
+    if (!_rvReady || !window.responsiveVoice) {
+      resolve(false) // signal: engine not available, caller falls back
+      return
     }
-    audio.onended = finish
-    audio.onerror = finish
-    audio.play().catch(finish)
+    let settled = false
+    const finish = () => { if (!settled) { settled = true; resolve(true) } }
+    try {
+      window.responsiveVoice.speak(text, 'UK English Male', {
+        onend: finish,
+        onerror: finish,
+        rate: 1.0,
+        pitch: 0.9,
+      })
+    } catch {
+      finish()
+    }
   })
 }
 
 function _playBrowserTTS(text) {
   return new Promise((resolve) => {
     try {
-      if (typeof window.speechSynthesis === 'undefined') return resolve()
-      // NOTE: do NOT call speechSynthesis.cancel() here — that would abort the
-      // currently-playing server utterance and drop words. Speak independently.
+      if (typeof window.speechSynthesis === 'undefined') return resolve(false)
       const u = new SpeechSynthesisUtterance(text)
       _currentUtterance = u
-      u.rate = 1.02
-      u.pitch = 1.0
-      u.volume = 1.0
+      u.rate = 1.0
+      u.pitch = 0.9
       const voices = window.speechSynthesis.getVoices?.() || []
-      const en = voices.find((v) => /en[-_]/i.test(v.lang)) || voices[0]
+      const enGB = voices.find((v) => /^en[-_]GB/i.test(v.lang))
+      const enMale = voices.find((v) => /^en/i.test(v.lang) && /male|daniel|george|arthur|fred/i.test(v.name))
+      const en = enMale || enGB || voices.find((v) => /^en[-_]/i.test(v.lang)) || voices[0]
       if (en) u.voice = en
-      u.onend = resolve
-      u.onerror = resolve
-      _currentUtterance = u
+      u.onend = () => resolve(true)
+      u.onerror = () => resolve(false)
       window.speechSynthesis.speak(u)
     } catch {
-      resolve()
+      resolve(false)
     }
   })
 }
 
-// Play one sentence: use a pre-fetched blob if available, otherwise fetch it
-// (through the serialized chain so we never overload the TTS worker).
+// Play one sentence: ResponsiveVoice (British male) -> browser en-GB fallback.
 function _playText(text) {
-  const cached = _audioCache.get(text)
-  if (cached) {
-    _audioCache.delete(text)
-    return _playBlob(cached)
-  }
-  return _fetchSpeechBlob(text)
-    .then((blob) => _playBlob(blob))
-    .catch(() => _playBrowserTTS(text))
+  return _playResponsiveVoice(text).then((ok) => {
+    if (ok) return true
+    return _playBrowserTTS(text)
+  })
 }
 
 function _advanceQueue() {
@@ -137,29 +108,17 @@ function _advanceQueue() {
   const next = _speechQueue.shift()
   if (next === undefined) return
   _speechPlaying = true
-  // Pre-synthesize the NEXT sentence in parallel (while this one plays) so the
-  // hand-off is instant. It runs through the serialized chain but the chain is
-  // idle during playback, so there is no overlap with the playing request.
-  const upcoming = _speechQueue[0]
-  if (upcoming && !_audioCache.has(upcoming)) {
-    _fetchSpeechBlob(upcoming)
-      .then((blob) => _audioCache.set(upcoming, blob))
-      .catch(() => {})
-  }
   _playText(next).finally(() => {
     _speechPlaying = false
     _advanceQueue()
   })
 }
 
-// Buffer for streamed replies: we accumulate tokens and only hand COMPLETE
-// sentences to the TTS queue. Speaking per-word (each token -> /speak ->
-// Kokoro synth) produces an audible pause after every word; speaking whole
-// sentences keeps NIRA's delivery natural.
+// Buffer for streamed replies: accumulate tokens and hand COMPLETE sentences
+// to the TTS queue. Speaking per-word produces an audible pause after every
+// word; speaking whole sentences keeps NIRA's delivery natural.
 let _streamBuffer = ''
 
-// Peel complete sentences (ending in . ! ? optionally followed by whitespace)
-// off the front of _streamBuffer; leave any trailing partial in the buffer.
 function _drainSentences() {
   const out = []
   const re = /^[\s]*([\s\S]*?[.!?])([\s]+|$)/
@@ -175,11 +134,9 @@ function _drainSentences() {
 }
 
 // Queue text to be spoken after the current speech finishes.
-//  - stream:false  -> speak the whole text as one unit (greetings, final msg).
-//  - stream:true   -> accumulate into the streaming buffer and flush any
-//                     COMPLETE sentences to the queue (low latency, natural
-//                     flow). Pass flush:true at end-of-stream to speak the
-//                     remaining partial sentence.
+//  - stream:false -> speak the whole text as one unit (greetings, final msg).
+//  - stream:true  -> accumulate into the streaming buffer and flush COMPLETE
+//                     sentences to the queue (low latency, natural flow).
 export function enqueueNira(text, { stream = false, flush = false } = {}) {
   if (stream) {
     if (text) _streamBuffer += String(text)
@@ -206,15 +163,11 @@ export async function speakNira(text) {
   return true
 }
 
-// Hard-stop any in-flight speech (server audio + browser TTS). Used when the
-// user taps the core to interrupt Nira mid-sentence.
+// Hard-stop any in-flight speech. Used when the user taps the core to
+// interrupt Nira mid-sentence.
 export function stopSpeech() {
   _speechQueue = []
   _streamBuffer = ''
-  _audioCache.clear()
-  // Drop any in-flight /speak requests so a new reply isn't blocked by a
-  // stale chain still waiting on a cancelled sentence.
-  _speakChain = Promise.resolve()
   _stopCurrentSpeech()
 }
 
@@ -228,7 +181,6 @@ export function useVoice({ enabled = false, onTranscript } = {}) {
   const [micActive, setMicActive] = useState(false)
   const recRef = useRef(null)
 
-  // Keep latest callbacks/flags without re-creating the recognizer.
   const transcriptCb = useRef(onTranscript)
   transcriptCb.current = onTranscript
   const enabledRef = useRef(enabled)
@@ -250,11 +202,7 @@ export function useVoice({ enabled = false, onTranscript } = {}) {
     rec.onerror = () => setMicActive(false)
     recRef.current = rec
     return () => {
-      try {
-        rec.abort?.()
-      } catch {
-        /* ignore */
-      }
+      try { rec.abort?.() } catch { /* ignore */ }
     }
   }, [])
 
@@ -264,17 +212,11 @@ export function useVoice({ enabled = false, onTranscript } = {}) {
     try {
       rec.start()
       setMicActive(true)
-    } catch {
-      /* already started */
-    }
+    } catch { /* already started */ }
   }, [])
 
   const stopMic = useCallback(() => {
-    try {
-      recRef.current?.stop()
-    } catch {
-      /* ignore */
-    }
+    try { recRef.current?.stop() } catch { /* ignore */ }
     setMicActive(false)
   }, [])
 

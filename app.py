@@ -517,39 +517,16 @@ def speak(req: ChatRequest) -> "Response | dict":
     if not req.message or not req.message.strip():
         raise HTTPException(status_code=400, detail="message is required")
 
-    # Surface a clear diagnostic if weights are missing (e.g. LFS pull failed
-    # in the build) rather than a generic "not available".
-    from speech import tts_kokoro, tts_onnx
-
-    if not tts_kokoro.available() and not (tts_onnx.ONNX_PATH.exists()):
-        return {
-            "error": "TTS model weights not found on the server. "
-            "Ensure the Docker build ran `git lfs pull` so kokoro-voice/ and "
-            "nira-voice/ contain the real model files (not LFS pointer stubs)."
-        }
-
-    # Memory guard: on the 512MB Render free tier, refuse to load the 325MB
-    # Kokoro model if we're already tight, so we return a clean error instead
-    # of OOM-killing the whole process. (Linux-only; no-op elsewhere.)
-    try:
-        import os
-
-        if tts_kokoro.available():
-            with open("/proc/self/statm") as fh:
-                rss_pages = int(fh.read().split()[1])
-            rss_mb = rss_pages * os.sysconf("SC_PAGE_SIZE") / (1024 * 1024)
-            if rss_mb > 360:  # ~150MB headroom under the 512MB ceiling
-                return {
-                    "error": "Server memory is too low to load the TTS model "
-                    "right now. Try again shortly, or upgrade the instance RAM."
-                }
-    except (OSError, ValueError, IndexError):
-        pass
-
-    wav = speak_onnx(req.message)
-    if wav is None:
-        return {"error": "TTS generation failed for this text."}
-    return Response(content=wav, media_type="audio/wav")
+    # Server-side TTS (large Kokoro/Piper model) was REMOVED to keep the
+    # free-tier instance under its 512MB RAM ceiling (a 325MB model + Python
+    # OOM-killed the process). NIRA's voice now runs CLIENT-SIDE via
+    # ResponsiveVoice ("UK English Male"). This endpoint is kept for
+    # compatibility but returns 404 so the client uses its own voice.
+    return {
+        "error": "Server TTS is disabled. NIRA speaks from the browser "
+        "(ResponsiveVoice UK English Male).",
+        "client_voice": True,
+    }
 
 
 @app.post("/chat", response_model=ChatResponse)

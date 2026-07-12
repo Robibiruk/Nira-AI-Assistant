@@ -49,6 +49,12 @@ self.addEventListener('fetch', (event) => {
   // file://, etc. Caching those throws "Request scheme ... is unsupported".
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return
 
+  // Never intercept cross-origin requests (cdnjs Font Awesome, Google Fonts,
+  // the Render API). Wrapping a third-party request in caches.match/fetch can
+  // return an "opaque" response and trip "opaque response used for a non
+  // no-cors request". Let the browser fetch those directly.
+  if (url.origin !== self.location.origin) return
+
   // Never cache API responses (they are dynamic / may be empty).
   if (API_PREFIXES.some((p) => url.pathname.startsWith(p))) return
 

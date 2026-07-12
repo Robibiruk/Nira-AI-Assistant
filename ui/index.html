@@ -24,13 +24,15 @@
       href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap"
       rel="stylesheet"
     />
-    <!-- Font Awesome (free CDN — kit ID returned 403) -->
+    <!-- Font Awesome (free CDN). The service worker does NOT intercept
+         cross-origin requests, so this loads directly from cdnjs. -->
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
-      crossorigin="anonymous"
-      referrerpolicy="no-referrer"
     />
+    <!-- ResponsiveVoice: tiny free TTS used for NIRA's British male voice
+         (no large model files — eliminates the server OOM). -->
+    <script src="https://code.responsivevoice.org/responsivevoice.js?key=3gL7zN0"></script>
   </head>
   <body>
     <div id="root"></div>
