@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 // NIRA's voice is produced CLIENT-SIDE (no large server model, so the
 // backend never OOMs on cold start). We use the BROWSER'S Web Speech API
-// (keyless, no external script, no console errors) with an explicit
-// en-GB / male English voice when available.
+// (keyless, no external script, no console errors) and ALWAYS select a
+// MALE BRITISH voice (en-GB male preferred) so the assistant sounds like
+// a man with a British accent. Selection is deterministic and cached.
 //
 // Only ONE line plays at a time. We track the in-flight engine and stop it
 // before starting a new one. Sentences are synthesised sequentially so a
@@ -14,6 +15,53 @@ let _currentUtterance = null
 // Sequential speech queue: streamed sentences play one after another.
 let _speechQueue = []
 let _speechPlaying = false
+
+// Voices load asynchronously in most browsers; cache them once available so
+// we can pick a STABLE MALE BRITISH voice every time (the browser default is
+// frequently female). Selection is deterministic — it never changes on its
+// own as long as the same voice names exist on the system.
+let _voices = []
+function _refreshVoices() {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return
+  try {
+    _voices = window.speechSynthesis.getVoices() || []
+  } catch {
+    _voices = []
+  }
+}
+if (typeof window !== 'undefined' && window.speechSynthesis) {
+  _refreshVoices()
+  try {
+    window.speechSynthesis.onvoiceschanged = _refreshVoices
+  } catch {
+    /* ignore */
+  }
+}
+
+// NIRA's voice: prefer en-GB MALE, then any English MALE, then en-GB
+// (British accent), then any English. Male is prioritised so the assistant
+// always sounds like a man; British is preferred for the accent.
+function _pickVoice() {
+  const vs =
+    _voices.length
+      ? _voices
+      : typeof window !== 'undefined' && window.speechSynthesis
+        ? window.speechSynthesis.getVoices() || []
+        : []
+  if (!vs.length) return null
+  const maleKW =
+    /male|daniel|george|arthur|fred|ryan|will|harry|james|oliver|lee|guy|russell|geoff|brian|english\s*male/i
+  const enGB = vs.filter((v) => v.lang && /^en[-_]gb/i.test(v.lang))
+  const enMale = vs.filter((v) => /^en/i.test(v.lang || '') && maleKW.test(v.name || ''))
+  return (
+    enGB.find((v) => maleKW.test(v.name || '')) || // en-GB male (ideal)
+    enMale.find((v) => /^en[-_]gb/i.test(v.lang || '')) || // en-GB male (alt)
+    enMale[0] || // any male English
+    enGB[0] || // British accent (en-GB)
+    vs.find((v) => /^en/i.test(v.lang || '')) || // any English
+    vs[0]
+  )
+}
 
 function _stopCurrentSpeech() {
   if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -29,12 +77,9 @@ function _playBrowserTTS(text) {
       const u = new SpeechSynthesisUtterance(text)
       _currentUtterance = u
       u.rate = 1.0
-      u.pitch = 0.9
-      const voices = window.speechSynthesis.getVoices?.() || []
-      const enGB = voices.find((v) => /^en[-_]GB/i.test(v.lang))
-      const enMale = voices.find((v) => /^en/i.test(v.lang) && /male|daniel|george|arthur|fred/i.test(v.name))
-      const en = enMale || enGB || voices.find((v) => /^en[-_]/i.test(v.lang)) || voices[0]
-      if (en) u.voice = en
+      u.pitch = 0.8 // lower pitch -> male timbre
+      const v = _pickVoice()
+      if (v) u.voice = v
       u.onend = () => resolve(true)
       u.onerror = () => resolve(false)
       window.speechSynthesis.speak(u)

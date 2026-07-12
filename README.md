@@ -61,6 +61,24 @@ Tools can also be invoked directly with **slash commands** (e.g. `/tools`, `/cle
 - **Font Awesome** (bundled locally, same-origin — no cross-origin storage/tracking-prevention issues), **Audiowide** display font for hero text.
 - Custom restyled scrollbars app-wide (thin cyan thumb).
 
+### 🖼️ Favicons
+NIRA ships a favicon **set** (not a single file) so every device picks the right
+resolution. They live in `ui/public/` and are referenced from `ui/index.html`:
+
+| File | Size | Used for |
+|------|------|----------|
+| `favicon-16.png` | 16×16 | Small browser-tab icons, bookmark bars |
+| `favicon-32.png` | 32×32 | Standard desktop tab / taskbar |
+| `favicon-70.png` | 70×70 | Windows tiles / medium shortcuts |
+| `favicon-96.png` | 96×96 | High-DPI tabs, Android home-screen, `apple-touch-icon` |
+
+The browser's `<link rel="icon" sizes="…">` + `srcSet`/`sizes` attributes let it
+choose the closest size for the current device pixel ratio — e.g. a 2× Retina tab
+uses `favicon-32.png` (rendered at 16 CSS px), a 3× phone uses `favicon-96.png`.
+The same set is reused in `manifest.webmanifest` (maskable + any-purpose) so the
+installed PWA icon looks crisp on phones and tablets. To change the logo, replace
+all four PNGs at the sizes above (keep the names) — no code change needed.
+
 ### 📦 Progressive Web App (PWA)
 - Installable: "Install app" / "Add to Home Screen" from any modern browser.
 - Ships a `manifest.webmanifest` (`display: standalone`, `orientation: any`) and a service worker (`sw.js`) that caches the production bundle for offline use.

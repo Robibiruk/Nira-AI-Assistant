@@ -6,11 +6,17 @@ import webbrowser
 from .base import Tool
 
 
-def _controller() -> webbrowser.BaseBrowser:
+def _controller() -> "webbrowser.BaseBrowser | None":
+    # On a headless server (Render, CI) no browser is installed, so
+    # `webbrowser.get(...)` raises "could not locate runnable browser".
+    # Return None instead of crashing so the tool degrades gracefully.
     try:
-        return webbrowser.get("chrome")
+        try:
+            return webbrowser.get("chrome")
+        except webbrowser.Error:
+            return webbrowser.get()
     except webbrowser.Error:
-        return webbrowser.get()
+        return None
 
 
 class OpenBrowserTool(Tool):
@@ -29,7 +35,13 @@ class OpenBrowserTool(Tool):
 
     def run(self, url: str | None = None) -> str:
         target = url or "https://www.google.com"
-        _controller().open(target)
+        ctrl = _controller()
+        if ctrl is None:
+            return (
+                "A web browser is not available in this environment (no runnable "
+                f"browser found). To open it yourself, visit: {target}"
+            )
+        ctrl.open(target)
         return f"Opened browser at {target}"
 
 
