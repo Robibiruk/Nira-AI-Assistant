@@ -86,11 +86,11 @@ const SOCIALS = [
 ]
 
 const QUICK_LINKS = [
-  { icon: BookOpen, title: 'Documentation', desc: 'Guides and references', href: '#' },
-  { icon: ListChecks, title: 'Changelog', desc: 'What changed recently', href: '#' },
-  { icon: Code, title: 'GitHub Repository', desc: 'Source code', href: '#' },
-  { icon: AlertCircle, title: 'Report an Issue', desc: 'Found a bug?', href: '#' },
-  { icon: Lightbulb, title: 'Request a Feature', desc: 'Suggest an idea', href: '#' },
+  { icon: BookOpen, title: 'Documentation', desc: 'Guides and references', href: 'https://github.com/Robibiruk/Nira-AI-Assistant#readme' },
+  { icon: ListChecks, title: 'Changelog', desc: 'What changed recently', href: 'https://github.com/Robibiruk/Nira-AI-Assistant/releases' },
+  { icon: Code, title: 'GitHub Repository', desc: 'Source code', href: 'https://github.com/Robibiruk/Nira-AI-Assistant' },
+  { icon: AlertCircle, title: 'Report an Issue', desc: 'Found a bug?', href: 'https://github.com/Robibiruk/Nira-AI-Assistant/issues/new' },
+  { icon: Lightbulb, title: 'Request a Feature', desc: 'Suggest an idea', href: 'https://github.com/Robibiruk/Nira-AI-Assistant/issues/new' },
 ]
 
 const ROAD_DONE = ['Smart Chat', 'Browser', 'File Tools', 'Research', 'Voice Assistant']
