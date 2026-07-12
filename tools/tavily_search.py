@@ -34,8 +34,9 @@ class TavilySearchTool(Tool):
         api_key = get_tool_key("tavily")
         if not api_key:
             return (
-                "Tavily API key not set. Add it in Settings → Tool Connections "
-                "(name 'tavily'). Falling back to keyless web search."
+                "Tavily API key not set. Add the TAVILY_API_KEY environment "
+                "variable on the backend (or in Settings → Tool Connections, "
+                "name 'tavily'). Falling back to keyless web search."
             )
         try:
             import httpx
@@ -45,8 +46,9 @@ class TavilySearchTool(Tool):
             with httpx.Client(timeout=20.0) as client:
                 resp = client.post(
                     _TAVILY_URL,
+                    headers={"Authorization": f"Bearer {api_key}"},
                     json={
-                        "api_key": api_key,
+                        "api_key": api_key,  # kept for older Tavily versions
                         "query": query,
                         "search_depth": search_depth or "basic",
                         "max_results": 6,

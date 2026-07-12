@@ -51,8 +51,10 @@ function activityFrom(messages) {
 }
 
 export default function App() {
-  const [name, setName] = useState('')
-  const [showNameModal, setShowNameModal] = useState(false)
+  const [name, setName] = useState(() => localStorage.getItem('nira_name') || '')
+  const [showNameModal, setShowNameModal] = useState(
+    () => !localStorage.getItem('nira_name'),
+  )
   const [authReadyState, setAuthReadyState] = useState(false)
   const [toast, setToast] = useState('')
   const [voiceOn, setVoiceOn] = useState(false)
@@ -89,6 +91,16 @@ export default function App() {
           setShowNameModal(true)
         }
       })
+      .then(() => {
+        // Restore the user's LAST session so memory survives reloads.
+        // localStorage keeps the id across reloads; Firestore holds the data.
+        const lastSid = localStorage.getItem('nira_last_session')
+        if (lastSid) {
+          setSessionIdState(lastSid)
+          nira.setSessionId(lastSid)
+          loadSessionSafe(lastSid)
+        }
+      })
       .catch(() => {
         // Firebase unavailable (offline / not configured) — degrade to a
         // local-only name prompt without crashing the app.
@@ -115,6 +127,7 @@ export default function App() {
   const persist = () => {
     const msgs = messagesRef.current
     if (!msgs.length) return
+    localStorage.setItem('nira_last_session', sessionId)
     const title = (msgs.find((m) => m.role === 'user')?.content || 'New chat')
       .slice(0, 80)
     saveSession(sessionId, title, msgs).catch(() => {})
@@ -123,6 +136,7 @@ export default function App() {
   const handleNewChat = () => {
     const id = `web-${uuid()}`
     setSessionIdState(id)
+    localStorage.setItem('nira_last_session', id)
     nira.setSessionId(id)
     nira.loadMessages([])
     setActivePage('chat')
@@ -131,6 +145,7 @@ export default function App() {
   // Resume a past session: load its messages from Firestore.
   const handleResume = (sid) => {
     setSessionIdState(sid)
+    localStorage.setItem('nira_last_session', sid)
     nira.setSessionId(sid)
     loadSessionSafe(sid)
     setActivePage('chat')
@@ -226,6 +241,7 @@ export default function App() {
 
   const handleName = (n) => {
     setName(n)
+    localStorage.setItem('nira_name', n)
     setShowNameModal(false)
     // Anonymous sign-up + save name to Firestore (no visible login).
     signInAnon()
@@ -381,6 +397,7 @@ export default function App() {
           models={models}
           currentModel={currentModel}
           onSelectModel={selectModel}
+          onRefreshModels={refreshModels}
           onQuickAction={handleQuickAction}
           features={features}
           onToggleFeature={toggleFeature}

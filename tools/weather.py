@@ -47,54 +47,71 @@ class WeatherTool(Tool):
         if not city:
             return "No city or location provided."
         try:
-            geo = httpx.get(
-                _GEOCODE_URL, params={"name": city, "count": 1}, timeout=15
-            ).json()
-            results = geo.get("results")
-            if not results:
-                return f"Could not find a city named '{city}'."
-            loc = results[0]
-            lat, lon = loc["latitude"], loc["longitude"]
-            display = loc.get("name", city)
+            # Longer timeouts + a couple of retries. Open-Meteo occasionally
+            # drops the TLS handshake from datacenter IPs (Render free tier),
+            # so we retry before failing over to wttr.in.
+            with httpx.Client(timeout=30.0) as client:
+                geo = None
+                for _ in range(2):
+                    try:
+                        geo = client.get(
+                            _GEOCODE_URL,
+                            params={"name": city, "count": 1},
+                        ).json()
+                        break
+                    except httpx.HTTPError:
+                        continue
+                if not geo:
+                    return f"Could not reach the geocoding service for '{city}'. Try again."
+                results = geo.get("results")
+                if not results:
+                    return f"Could not find a city named '{city}'."
+                loc = results[0]
+                lat, lon = loc["latitude"], loc["longitude"]
+                display = loc.get("name", city)
 
-            fc = httpx.get(
-                _FORECAST_URL,
-                params={
-                    "latitude": lat,
-                    "longitude": lon,
-                    "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
-                },
-                timeout=15,
-            ).json()
-            cur = fc.get("current", {})
-            # Open-Meteo sometimes returns an empty "current" block on the
-            # first call (esp. from datacenter IPs / rate limits). Retry once
-            # with the minimal single-field request before giving up.
-            if not cur:
-                fc = httpx.get(
-                    _FORECAST_URL,
-                    params={
-                        "latitude": lat,
-                        "longitude": lon,
-                        "current": "temperature_2m",
-                    },
-                    timeout=15,
-                ).json()
-                cur = fc.get("current", {})
-            if not cur:
+                fc = None
+                for _ in range(2):
+                    try:
+                        fc = client.get(
+                            _FORECAST_URL,
+                            params={
+                                "latitude": lat,
+                                "longitude": lon,
+                                "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
+                            },
+                        ).json()
+                        break
+                    except httpx.HTTPError:
+                        continue
+                cur = (fc or {}).get("current", {})
+                if not cur:
+                    # Last resort: wttr.in (no API key, plaintext). It returns
+                    # e.g. "Nairobi: 🌦 +18°C". Parse a compact summary.
+                    try:
+                        r = client.get(
+                            "https://wttr.in/" + city,
+                            params={"format": "3", "u": "c"},
+                            headers={"User-Agent": "NIRA/1.0"},
+                            timeout=20.0,
+                        )
+                        if r.status_code == 200 and r.text.strip():
+                            return f"Weather in {display}: {r.text.strip()}"
+                    except httpx.HTTPError:
+                        pass
+                    return (
+                        f"Found {display} but the weather service returned no "
+                        "current conditions (it may be rate-limited right now). "
+                        "Try again in a moment."
+                    )
+                temp = cur.get("temperature_2m")
+                code = cur.get("weather_code")
+                humidity = cur.get("relative_humidity_2m")
+                wind = cur.get("wind_speed_10m")
                 return (
-                    f"Found {display} but the weather service returned no "
-                    "current conditions (it may be rate-limited right now). "
-                    "Try again in a moment."
+                    f"Weather in {display}: {_describe(code)}, "
+                    f"{temp}°C, humidity {humidity}%, wind {wind} km/h."
                 )
-            temp = cur.get("temperature_2m")
-            code = cur.get("weather_code")
-            humidity = cur.get("relative_humidity_2m")
-            wind = cur.get("wind_speed_10m")
-            return (
-                f"Weather in {display}: {_describe(code)}, "
-                f"{temp}°C, humidity {humidity}%, wind {wind} km/h."
-            )
         except httpx.HTTPError as exc:
             return f"Could not fetch weather (network error): {exc}"
         except Exception as exc:  # noqa: BLE001 - never crash the assistant

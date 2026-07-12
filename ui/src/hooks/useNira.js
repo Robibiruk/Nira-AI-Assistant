@@ -88,6 +88,24 @@ export function useNira(sessionId = 'web', options = {}) {
     }
   }, [])
 
+  // Manually re-fetch the model list (e.g. after adding a provider key).
+  const refreshModels = useCallback(async () => {
+    try {
+      const r = await apiFetch('/models')
+      if (!r.ok || !r.data) return
+      const seen = new Set()
+      const unique = (r.data.models || []).filter((m) => {
+        if (!m || !m.id || seen.has(m.id)) return false
+        seen.add(m.id)
+        return true
+      })
+      setModels(unique)
+      if (r.data.current) setCurrentModel(r.data.current)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
   const greet = useCallback((name) => {
     setMessages([{ role: 'assistant', content: `Hello, ${name}! How can I help you today?` }])
   }, [])
@@ -311,6 +329,7 @@ export function useNira(sessionId = 'web', options = {}) {
     models,
     currentModel,
     selectModel,
+    refreshModels,
     greet,
     sendMessage,
     runSlashCommand,

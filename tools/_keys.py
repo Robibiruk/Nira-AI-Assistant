@@ -14,13 +14,20 @@ _KEYS_PATH = _BASE / "config" / "tool_keys.json"
 
 
 def get_tool_key(name: str) -> str:
-    """Return the stored api_key for a tool, or '' if not configured.
+    """Return the api_key for a tool, or '' if not configured.
 
-    Checks config/tool_keys.json first, then falls back to the environment
-    variable ``<NAME>_API_KEY`` (e.g. TAVILY_API_KEY). This lets a key
-    set in the host's env (Render / Vercel / .env) work without manually
-    saving it in Settings.
+    Priority (env WINS): the host environment variable ``<NAME>_API_KEY``
+    (e.g. TAVILY_API_KEY on Render) is checked FIRST. This lets deploy-time
+    secrets work automatically without any manual Settings setup. The
+    config/tool_keys.json file (set via the UI) is used only as a fallback,
+    because on ephemeral hosts (Render free tier) that file is wiped on every
+    redeploy and would otherwise override a perfectly good env var.
     """
+    import os
+
+    env_key = (os.getenv(f"{name.upper()}_API_KEY") or "").strip()
+    if env_key:
+        return env_key
     try:
         if not _KEYS_PATH.exists():
             return ""
@@ -29,15 +36,8 @@ def get_tool_key(name: str) -> str:
         data = {}
     entry = data.get(name)
     if isinstance(entry, dict):
-        key = (entry.get("api_key") or "").strip()
-    else:
-        key = str(entry or "").strip()
-    if key:
-        return key
-    # Fallback to the conventional environment variable.
-    import os
-
-    return (os.getenv(f"{name.upper()}_API_KEY") or "").strip()
+        return (entry.get("api_key") or "").strip()
+    return str(entry or "").strip()
 
 
 def get_tool_extra(name: str) -> dict:

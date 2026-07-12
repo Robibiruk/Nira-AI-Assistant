@@ -41,6 +41,7 @@ export default function RightSidebar({
   models,
   currentModel,
   onSelectModel,
+  onRefreshModels,
   onQuickAction,
   features = {},
   onToggleFeature,
@@ -64,12 +65,19 @@ export default function RightSidebar({
   // Searchable model picker state.
   const [modelOpen, setModelOpen] = useState(false)
   const [modelQuery, setModelQuery] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
   const filteredModels = (models || []).filter((m) => {
     const name = (m.name || '').toLowerCase()
     const tokens = modelQuery.toLowerCase().trim().split(/\s+/).filter(Boolean)
     // Every typed word must appear as a substring (in any order/position).
     return tokens.every((t) => name.includes(t))
   })
+
+  const doRefresh = async () => {
+    if (!onRefreshModels) return
+    setRefreshing(true)
+    try { await onRefreshModels() } finally { setRefreshing(false) }
+  }
 
   const chooseModel = (id) => {
     onSelectModel?.(id)
@@ -117,6 +125,14 @@ export default function RightSidebar({
             >
               <span className="model-current">{currentModel ? shortModel(currentModel) : 'loading…'}</span>
               <span className="model-caret">🔍</span>
+            </button>
+            <button
+              className="model-refresh-btn"
+              onClick={doRefresh}
+              disabled={refreshing}
+              title="Refresh models"
+            >
+              {refreshing ? '⟳…' : '⟳'}
             </button>
             {modelOpen && (
               <div className="model-pop">

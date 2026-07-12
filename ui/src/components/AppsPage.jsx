@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { apiFetch, apiError } from '../api'
+import { useEffect, useState } from 'react'
 import { detectDevice } from '../device'
 
-const PERM_KEY = 'nira.apps.permission'
-const STORE_LINKS = {
+// A web browser CANNOT enumerate a user's installed apps (no such API exists,
+// with or without permission — it's a hard privacy boundary). What we *can*
+// do reliably is detect the OS and offer curated, well-known apps with real
+// deep-links + store links. On the Windows/Mac DESKTOP build, the backend can
+// enumerate real installed apps (handled separately below).
+const STORE = {
   windows: { label: 'Microsoft Store', url: 'https://apps.microsoft.com/' },
   macos: { label: 'Mac App Store', url: 'https://apps.apple.com/us/genre/mac/id39' },
   linux: { label: 'Flathub', url: 'https://flathub.org/' },
@@ -11,233 +14,118 @@ const STORE_LINKS = {
   ios: { label: 'App Store', url: 'https://apps.apple.com/' },
 }
 
-function monogram(name) {
-  return (name || '?').trim().charAt(0).toUpperCase() || '?'
+// Curated popular apps with real launch links. `icon` is an emoji so it works
+// everywhere with no asset fetching; `open` is what NIRA taps/opens.
+const POPULAR = [
+  { name: 'WhatsApp', icon: '💬', open: 'https://web.whatsapp.com', web: true },
+  { name: 'YouTube', icon: '▶️', open: 'https://youtube.com', web: true },
+  { name: 'Gmail', icon: '✉️', open: 'https://mail.google.com', web: true },
+  { name: 'Spotify', icon: '🎧', open: 'https://open.spotify.com', web: true },
+  { name: 'Telegram', icon: '✈️', open: 'https://web.telegram.org', web: true },
+  { name: 'X (Twitter)', icon: '𝕏', open: 'https://x.com', web: true },
+  { name: 'Google Maps', icon: '🗺️', open: 'https://maps.google.com', web: true },
+  { name: 'Netflix', icon: '🎬', open: 'https://netflix.com', web: true },
+  { name: 'ChatGPT', icon: '🤖', open: 'https://chat.openai.com', web: true },
+  { name: 'Calendar', icon: '📅', open: 'https://calendar.google.com', web: true },
+  { name: 'Calculator', icon: '🧮', open: null, action: 'calculator' },
+  { name: 'Clock', icon: '⏰', open: null, action: 'clock' },
+]
+
+const OS_LABEL = {
+  windows: 'Windows',
+  macos: 'macOS',
+  linux: 'Linux',
+  android: 'Android',
+  ios: 'iPhone / iPad',
 }
 
 export default function AppsPage({ onSend }) {
-  const [granted, setGranted] = useState(() => localStorage.getItem(PERM_KEY) === '1')
-  const [data, setData] = useState({ installed: [], windows: [], apps: [], tabs: [], platform: detectDevice() })
+  const [device, setDevice] = useState(detectDevice())
+  const [tab, setTab] = useState('popular') // popular | installed
+  const [installed, setInstalled] = useState([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [tab, setTab] = useState('installed') // installed | windows | tabs
-  const [busy, setBusy] = useState('') // title being acted on
-  const timerRef = useRef(null)
-  const clientDevice = detectDevice()
 
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    // Detect the USER's real device in the browser. On a remote backend the
-    // server's own OS is irrelevant (e.g. Linux/flathub) — we want the
-    // client's platform so the store link (Play Store / App Store / etc.) is
-    // correct and the app list comes from the device report.
-    try {
-      const res = await apiFetch('/device/apps')
-      if (res.ok && res.data) {
-        const apps = (res.data.apps || []).map((a) =>
-          typeof a === 'string' ? { name: a } : { name: a.name || String(a) },
-        )
-        setData((d) => ({
-          ...d,
-          apps,
-          platform: res.data.device || clientDevice,
-        }))
-      }
-    } catch {
-      /* non-fatal */
-    }
-    // On Windows, also pull the locally-enumerated desktop snapshot.
-    if (clientDevice === 'windows') {
-      const res = await apiFetch('/desktop')
-      setLoading(false)
-      if (!res.ok || !res.data) {
-        setError(apiError(res, 'failed to read desktop'))
-        return
-      }
-      setData({
-        installed: res.data.installed || [],
-        windows: res.data.windows || [],
-        apps: res.data.apps || [],
-        tabs: res.data.tabs || [],
-        platform: res.data.platform || 'windows',
-      })
-    } else {
-      setLoading(false)
-    }
-  }, [])
-
+  // On a Windows/Mac DESKTOP build the backend CAN enumerate real apps.
   useEffect(() => {
-    if (granted) {
-      refresh()
-      // Auto-refresh every 8s while the page is open.
-      timerRef.current = setInterval(refresh, 8000)
+    let alive = true
+    if (device === 'windows') {
+      setLoading(true)
+      fetch('/desktop')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (alive && d) setInstalled(d.installed || [])
+        })
+        .catch(() => {})
+        .finally(() => alive && setLoading(false))
     }
-    return () => clearInterval(timerRef.current)
-  }, [granted, refresh, tab])
+    return () => { alive = false }
+  }, [device])
 
-  if (!granted) {
-    return (
-      <div className="page">
-        <div className="center-header">
-          <h1 className="center-greeting">📦 Apps</h1>
-          <p className="center-sub">See your installed and open apps, and jump straight to them.</p>
-        </div>
-        <div className="perm-card">
-          <div className="perm-icon">🔐</div>
-          <h3>This needs access to your device</h3>
-          <p>
-            NIRA can list your installed apps, open windows, and browser tabs, and switch
-            to or close them for you. Nothing leaves your machine — it's all local.
-          </p>
-          <p className="perm-note">
-            Note: from a web browser NIRA can't read your installed apps (browsers
-            block that for privacy). App listing works fully when NIRA runs on your
-            Windows or Mac desktop. On this device you'll see your store below.
-          </p>
-          <div className="perm-actions">
-            <button className="btn-primary" onClick={() => { localStorage.setItem(PERM_KEY, '1'); setGranted(true) }}>
-              Allow access
-            </button>
-            <button className="btn-ghost" onClick={() => (window.history.length > 1 ? window.history.back() : null)}>
-              Not now
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const store = STORE[device] || STORE.windows
 
-  const store = STORE_LINKS[data.platform] || STORE_LINKS.windows
-
-  const launch = async (name) => {
-    setBusy(name)
-    const res = await apiFetch('/desktop/action', {
-      method: 'POST',
-      body: JSON.stringify({ action: 'open', kind: 'installed', title: name }),
-    })
-    setBusy('')
-    if (res.ok && res.data) {
-      // brief feedback, then refresh (an open app may now appear in Opened)
-      refresh()
-    } else {
-      setError(apiError(res, 'failed to launch'))
+  const open = (app) => {
+    if (app.action && onSend) {
+      onSend(app.action)
+      return
     }
+    if (app.open) window.open(app.open, '_blank', 'noopener')
   }
-
-  const act = async (action, kind, item) => {
-    const title = item.title || item.name || ''
-    setBusy(title + action)
-    const res = await apiFetch('/desktop/action', {
-      method: 'POST',
-      body: JSON.stringify({ action, kind, title, query: title, exe: item.exe || '' }),
-    })
-    setBusy('')
-    if (res.ok && res.data) {
-      // brief feedback, then refresh the list
-      refresh()
-    } else {
-      setError(apiError(res, 'action failed'))
-    }
-  }
-
-  const renderInstalled = () => (
-    <div className="app-grid">
-      {data.installed.length === 0 ? (
-        <div className="empty">
-          {clientDevice === 'windows'
-            ? 'No installed apps detected.'
-            : "NIRA can't read installed apps from a web browser (browsers block it for privacy). App listing works when NIRA runs on your Windows/Mac desktop."}
-        </div>
-      ) : (
-        data.installed.map((a, i) => (
-          <button key={i} className="app-tile" onClick={() => launch(a.name)} disabled={busy === a.name}>
-            {a.icon ? (
-              <img className="app-icon" src={a.icon} alt="" />
-            ) : (
-              <img
-                className="app-icon"
-                width="94"
-                height="94"
-                src="https://img.icons8.com/3d-fluency/94/application.png"
-                alt="application"
-              />
-            )}
-            <span className="app-name">{a.name}</span>
-          </button>
-        ))
-      )}
-    </div>
-  )
-
-  const renderOpen = () => (
-    <div className="desktop-list">
-      {data.windows.length === 0 ? (
-        <div className="empty">No open windows.</div>
-      ) : (
-        data.windows.map((w, i) => (
-          <div key={i} className="desktop-row">
-            <button className="desktop-row-main" onClick={() => act('focus', 'window', w)} title="Jump to this window">
-              <span className="desktop-row-title">{w.title}</span>
-              {w.exe && <span className="desktop-row-sub">{w.exe}</span>}
-            </button>
-            <button className="row-close" title="Close window" onClick={() => act('close', 'window', w)} disabled={busy === (w.title + 'close')}>✕</button>
-          </div>
-        ))
-      )}
-    </div>
-  )
-
-  const renderTabs = () => (
-    <div className="desktop-list">
-      {data.tabs.length === 0 ? (
-        <div className="empty">No browser tabs detected (open Chrome/Edge/Brave, or not on Windows).</div>
-      ) : (
-        data.tabs.map((t, i) => (
-          <div key={i} className="desktop-row">
-            <button className="desktop-row-main" onClick={() => act('focus', 'tab', t)} title="Jump to this tab">
-              <span className="desktop-row-title">{t.title}</span>
-              {t.source && <span className="desktop-row-sub">{t.source}</span>}
-            </button>
-            <button className="row-close" title="Close tab" onClick={() => act('close', 'tab', t)} disabled={busy === (t.title + 'close')}>✕</button>
-          </div>
-        ))
-      )}
-    </div>
-  )
 
   return (
     <div className="page">
       <div className="center-header">
         <h1 className="center-greeting">📦 Apps</h1>
         <p className="center-sub">
-          Installed and open apps on your device. Tap to launch or jump to one; ✕ closes it.
+          You're on <b>{OS_LABEL[device] || 'this device'}</b>. Tap an app to open it.
         </p>
       </div>
 
       <div className="screen-controls">
-        <button className={`btn-ghost ${tab === 'installed' ? 'active' : ''}`} onClick={() => setTab('installed')}>
-          Installed ({data.installed.length})
+        <button className={`btn-ghost ${tab === 'popular' ? 'active' : ''}`} onClick={() => setTab('popular')}>
+          Popular
         </button>
-        <button className={`btn-ghost ${tab === 'windows' ? 'active' : ''}`} onClick={() => setTab('windows')}>
-          Opened ({data.windows.length})
-        </button>
-        <button className={`btn-ghost ${tab === 'tabs' ? 'active' : ''}`} onClick={() => setTab('tabs')}>
-          Browser ({data.tabs.length})
-        </button>
+        {device === 'windows' && (
+          <button className={`btn-ghost ${tab === 'installed' ? 'active' : ''}`} onClick={() => setTab('installed')}>
+            Installed ({installed.length})
+          </button>
+        )}
         <a className="store-link" href={store.url} target="_blank" rel="noreferrer" title={store.label}>
           <span className="store-emoji">🛒</span> {store.label}
         </a>
-        <button className="btn-primary" onClick={refresh} disabled={loading}>
-          {loading ? 'Refreshing…' : '↻ Refresh'}
-        </button>
       </div>
 
-      {error && <div className="error-box">{error}</div>}
+      {tab === 'popular' && (
+        <>
+          <p className="app-note">
+            Browsers can't read the apps installed on your device (privacy protection),
+            so here are quick links to the most-used apps. On the Windows/Mac desktop app,
+            your real installed apps show under <b>Installed</b>.
+          </p>
+          <div className="app-grid">
+            {POPULAR.map((a) => (
+              <button key={a.name} className="app-tile" onClick={() => open(a)}>
+                <span className="app-emoji">{a.icon}</span>
+                <span className="app-name">{a.name}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
-      {tab === 'installed' && renderInstalled()}
-      {tab === 'windows' && renderOpen()}
-      {tab === 'tabs' && renderTabs()}
+      {tab === 'installed' && (
+        <div className="app-grid">
+          {loading && <div className="empty">Reading your installed apps…</div>}
+          {!loading && installed.length === 0 && (
+            <div className="empty">No installed apps detected on this machine.</div>
+          )}
+          {installed.map((a, i) => (
+            <button key={i} className="app-tile" onClick={() => open({ open: null, action: a.name })}>
+              <span className="app-emoji">🗔</span>
+              <span className="app-name">{a.name || a}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
