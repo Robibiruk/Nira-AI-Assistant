@@ -505,17 +505,32 @@ def set_name(req: NameRequest) -> dict:
 
 
 @app.post("/speak")
-def speak(req: ChatRequest) -> "FileResponse | dict":
+def speak(req: ChatRequest) -> "Response | dict":
     """Server-side TTS: return WAV audio for the given text.
 
-    Uses the nira-voice ONNX model if available. Returns 404 if the
-    model is not installed or TTS failed.
+    Uses Kokoro (natural) with a Piper fallback. Returns a WAV audio response
+    when the model weights are present; otherwise a clear error so the client
+    can fall back to browser speech synthesis instead of failing silently.
     """
-    from fastapi.responses import FileResponse, Response
+    from fastapi.responses import Response
+
+    if not req.message or not req.message.strip():
+        raise HTTPException(status_code=400, detail="message is required")
+
+    # Surface a clear diagnostic if weights are missing (e.g. LFS pull failed
+    # in the build) rather than a generic "not available".
+    from speech import tts_kokoro, tts_onnx
+
+    if not tts_kokoro.available() and not (tts_onnx.ONNX_PATH.exists()):
+        return {
+            "error": "TTS model weights not found on the server. "
+            "Ensure the Docker build ran `git lfs pull` so kokoro-voice/ and "
+            "nira-voice/ contain the real model files (not LFS pointer stubs)."
+        }
 
     wav = speak_onnx(req.message)
     if wav is None:
-        return {"error": "TTS not available (install onnxruntime + model files)"}
+        return {"error": "TTS generation failed for this text."}
     return Response(content=wav, media_type="audio/wav")
 
 
