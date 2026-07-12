@@ -4,6 +4,33 @@ import { SLASH_COMMANDS, parseSlash } from '../slash'
 import { loadName } from '../firebase'
 import { lsGetModel, lsSetModel } from '../memoryStore'
 
+// Capture the user's screen via the browser Screen Capture API (keyless).
+// Grabs a single frame from the shared surface and returns a PNG data URL,
+// or null if unsupported / the user cancelled the picker.
+async function captureScreen() {
+  try {
+    const md = navigator.mediaDevices
+    if (!md || !md.getDisplayMedia) return null
+    const stream = await md.getDisplayMedia({ video: { frameRate: 1 }, audio: false })
+    const track = stream.getVideoTracks()[0]
+    const video = document.createElement('video')
+    video.srcObject = stream
+    await video.play()
+    // Give the frame a tick to paint.
+    await new Promise((r) => setTimeout(r, 250))
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth || track.getSettings().width || 1280
+    canvas.height = video.videoHeight || track.getSettings().height || 720
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+    stream.getTracks().forEach((t) => t.stop())
+    video.srcObject = null
+    return canvas.toDataURL('image/png')
+  } catch {
+    // User cancelled the picker or permission denied.
+    return null
+  }
+}
+
 // Tool catalogue shown in the side panel. `id` must match the tool name the
 // backend reports in tool_result/executing events so the active highlight works.
 const TOOLS = [
@@ -194,6 +221,24 @@ export function useNira(sessionId = 'web', options = {}) {
                 /* popup blocked — link is still shown in chat to click */
               }
             }
+            break
+          }
+          case 'capture_screen': {
+            // Backend is headless (Render) — capture on the USER'S machine via
+            // the browser Screen Capture API (keyless). Shows a native picker.
+            captureScreen().then((dataUrl) => {
+              if (dataUrl) {
+                setMessages((m) => [
+                  ...m,
+                  { role: 'assistant', content: 'Here is your screenshot:', image: dataUrl },
+                ])
+              } else {
+                setMessages((m) => [
+                  ...m,
+                  { role: 'assistant', content: 'Screen capture was cancelled or is not supported in this browser.' },
+                ])
+              }
+            })
             break
           }
           case 'message':

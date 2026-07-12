@@ -26,6 +26,7 @@ from loguru import logger
 import re
 
 _OPEN_URL_RE = re.compile(r'OPEN_URL::(https?://[^\s)<>\]]+)')
+_CAPTURE_RE = re.compile(r'\s*CAPTURE_SCREEN::')
 
 
 def _extract_open_urls(text):
@@ -41,11 +42,18 @@ def _extract_open_urls(text):
     return out
 
 
+def _wants_screen_capture(text):
+    return bool(text) and 'CAPTURE_SCREEN::' in text
+
+
 def _strip_open_url_sentinels(text):
-    # Turn "OPEN_URL::https://x" into a clean human-readable line.
+    # Turn "OPEN_URL::https://x" into a clean human-readable line and drop the
+    # CAPTURE_SCREEN:: sentinel entirely.
     if not text:
         return text
-    return _OPEN_URL_RE.sub(r'\1', text)
+    text = _OPEN_URL_RE.sub(r'\1', text)
+    text = _CAPTURE_RE.sub('', text).rstrip()
+    return text
 
 
 from ai.provider import MultiProviderClient, ProviderError
@@ -256,10 +264,13 @@ class Assistant:
                 # open a URL in the user's browser (via the OPEN_URL:: sentinel).
                 # Search/Spotify results are NOT auto-opened.
                 open_urls = _extract_open_urls(output)
+                wants_capture = _wants_screen_capture(output)
                 clean_output = _strip_open_url_sentinels(output)
                 yield {"type": "tool_result", "tool": name, "output": clean_output}
                 for u in open_urls:
                     yield {"type": "open_url", "url": u, "tool": name}
+                if wants_capture:
+                    yield {"type": "capture_screen", "tool": name}
                 messages.append(
                     {
                         "role": "tool",

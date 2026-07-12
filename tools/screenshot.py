@@ -40,21 +40,16 @@ class ScreenshotTool(Tool):
             return f"Screenshot saved to {out}"
         except Exception as exc:  # noqa: BLE001
             err = str(exc).strip()
-            note_msg = f" ({err})" if err else ""
-            # Typical headless cause: no display/display server available.
-            if "display" in err.lower() or "screen" in err.lower():
-                return (
-                    "Screenshot not available here: this environment has no "
-                    f"display/display-server{note_msg}. Screenshots work on a "
-                    "desktop machine with a screen."
-                )
-            # On systems without mss installed, suggest the dependency.
+            # Headless server (Render): no display. Hand the capture to the
+            # FRONTEND, which uses the browser Screen Capture API on the user's
+            # own machine (keyless). The sentinel is turned into a capture_screen
+            # event; the plain text is what the user sees.
             if "No module named" in err:
                 return (
-                    "Screenshot needs the 'mss' package. Install it with "
-                    "`pip install mss` (it is listed in requirements.txt)."
+                    "Screenshot needs the 'mss' package (listed in "
+                    "requirements.txt). CAPTURE_SCREEN::"
                 )
-            return f"Screenshot unavailable in this environment{note_msg}."
+            return "Capturing your screen — pick a window or screen to share. CAPTURE_SCREEN::"
 
 
 screenshot_tool = ScreenshotTool()

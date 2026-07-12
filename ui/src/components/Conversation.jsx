@@ -105,7 +105,14 @@ export default function Conversation({ messages, streaming }) {
               <span>·</span>
               <span>{timeNow()}</span>
             </div>
-            <div className="msg-body">{m.content}</div>
+            <div className="msg-body">
+              {m.image && (
+                <a href={m.image} target="_blank" rel="noreferrer">
+                  <img className="msg-image" src={m.image} alt="screenshot" />
+                </a>
+              )}
+              {m.content}
+            </div>
           </div>
         )
       })}

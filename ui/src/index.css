@@ -606,6 +606,15 @@ body::before {
   word-break: break-word;
 }
 
+.msg-image {
+  display: block;
+  max-width: 100%;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--hairline);
+  cursor: zoom-in;
+}
+
 .msg-user .msg-body {
   background: linear-gradient(180deg, rgba(73, 230, 255, 0.18), rgba(73, 230, 255, 0.06));
   border-color: rgba(73, 230, 255, 0.3);
