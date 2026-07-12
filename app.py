@@ -27,7 +27,6 @@ from pydantic import BaseModel
 from speech.tts import speak_onnx
 from core import runtime
 from core.assistant import Assistant
-from core.memory import Memory
 from core import router as tool_router
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -73,6 +72,12 @@ def _init_providers() -> None:
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
+    # Conversation history is owned by the CLIENT (Firestore, per anonymous
+    # Firebase UID) — the server no longer keeps a shared SQLite store. The
+    # client sends the prior turns so the model has context, keeping memory
+    # private to each device/user and resetting cleanly when Firestore is empty.
+    history: list[dict] = []
+    name: str = ""
 
 
 class ChatResponse(BaseModel):
@@ -110,15 +115,6 @@ class FeatureState(BaseModel):
     """Enable/disable a Quick-Action feature (persisted locally)."""
     name: str
     enabled: bool = True
-
-
-class SessionRename(BaseModel):
-    sid: str
-    title: str
-
-
-class SessionDelete(BaseModel):
-    sid: str
 
 
 class ToolRunRequest(BaseModel):
@@ -329,33 +325,10 @@ def set_feature(req: "FeatureState") -> dict:
     return {"ok": True, "name": name, "enabled": d[name]}
 
 
-@app.get("/sessions")
-def list_sessions() -> dict:
-    """List saved chat sessions (newest first), each with its auto title."""
-    return {"sessions": Memory().list_sessions()}
-
-
-@app.get("/sessions/{sid}")
-def get_session(sid: str) -> dict:
-    """Return a session's full message history (for resume)."""
-    return {"sid": sid, "messages": Memory().get_history(sid, limit=200)}
-
-
-@app.post("/sessions/rename")
-def rename_session(req: "SessionRename") -> dict:
-    if not req.sid:
-        raise HTTPException(status_code=400, detail="sid is required")
-    Memory().rename_session(req.sid, req.title)
-    return {"ok": True, "sid": req.sid, "title": req.title}
-
-
-@app.post("/sessions/delete")
-def delete_session(req: "SessionDelete") -> dict:
-    if not req.sid:
-        raise HTTPException(status_code=400, detail="sid is required")
-    Memory().delete_session(req.sid)
-    return {"ok": True, "removed": req.sid}
-
+# NOTE: chat sessions + message history are now owned by the CLIENT and
+# stored in Firebase Firestore (per anonymous UID). The server no longer
+# keeps a shared SQLite sessions table — these endpoints were removed so
+# memory is private per user and resets when Firestore is empty.
 
 @app.post("/tools/run")
 def run_tool(req: "ToolRunRequest") -> dict:
@@ -496,12 +469,15 @@ def desktop_action(req: DesktopActionRequest) -> dict:
 
 @app.post("/prefs/name")
 def set_name(req: NameRequest) -> dict:
-    """Persist the user's name so the assistant can greet them personally."""
-    name = req.name.strip()
+    """Deprecated: name now lives in Firebase Firestore (anonymous UID).
+
+    Kept as a no-op so old clients don't error; the UI persists the name to
+    Firestore instead of the server.
+    """
+    name = (req.name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="name is required")
-    Memory().set_pref("name", name)
-    return {"ok": True, "name": name}
+    return {"ok": True, "name": name, "note": "persisted client-side (Firestore)"}
 
 
 @app.post("/speak")
@@ -533,7 +509,9 @@ def speak(req: ChatRequest) -> "Response | dict":
 def chat(req: ChatRequest) -> ChatResponse:
     if not req.message or not req.message.strip():
         raise HTTPException(status_code=400, detail="message is required")
-    assistant = Assistant(session_id=req.session_id)
+    assistant = Assistant(
+        session_id=req.session_id, history=req.history, name=req.name
+    )
     reply = assistant.ask(req.message)
     return ChatResponse(reply=reply)
 
@@ -549,7 +527,9 @@ async def chat_stream(req: ChatRequest):
     if not req.message or not req.message.strip():
         raise HTTPException(status_code=400, detail="message is required")
 
-    assistant = Assistant(session_id=req.session_id)
+    assistant = Assistant(
+        session_id=req.session_id, history=req.history, name=req.name
+    )
     loop = asyncio.get_running_loop()
     event_q: "asyncio.Queue" = asyncio.Queue()
 

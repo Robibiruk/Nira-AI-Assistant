@@ -7,7 +7,6 @@ import ChatInput from './components/ChatInput'
 import SettingsPanel from './components/SettingsPanel'
 import NameModal from './components/NameModal'
 import MemoryPage from './components/MemoryPage'
-import { getDeviceSessionId, listSessions, upsertSession, renameSession, deleteSession } from './sessions'
 import AppsPage from './components/AppsPage'
 import BrowserPage from './components/BrowserPage'
 import ResearchPage from './components/ResearchPage'
@@ -18,8 +17,24 @@ import { useNira } from './hooks/useNira'
 import { useVoice, speakNira, stopSpeech, enqueueNira } from './hooks/useVoice'
 import { apiFetch, apiUrl } from './api'
 import { reportDeviceApps } from './device'
+import {
+  authReady,
+  signInAnon,
+  loadName,
+  saveName,
+  listSessions,
+  saveSession,
+  deleteSessionFs,
+} from './firebase'
 
-const NAME_KEY = 'nira_name'
+function uuid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
 
 function activityFrom(messages) {
   const out = []
@@ -36,10 +51,9 @@ function activityFrom(messages) {
 }
 
 export default function App() {
-  const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) || '')
-  const [showNameModal, setShowNameModal] = useState(
-    () => !localStorage.getItem(NAME_KEY),
-  )
+  const [name, setName] = useState('')
+  const [showNameModal, setShowNameModal] = useState(false)
+  const [authReadyState, setAuthReadyState] = useState(false)
   const [toast, setToast] = useState('')
   const [voiceOn, setVoiceOn] = useState(false)
   const [activePage, setActivePage] = useState('chat')
@@ -50,19 +64,37 @@ export default function App() {
   const [custom, setCustom] = useState([])
   const [toolKeys, setToolKeys] = useState({})
   const [features, setFeatures] = useState({})
-  const [sessionId, setSessionIdState] = useState(() => getDeviceSessionId())
-  const [sessions, setSessions] = useState(() => listSessions())
+  const [sessionId, setSessionIdState] = useState(() => `web-${uuid()}`)
+  const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
   const [showGreeting, setShowGreeting] = useState(false)
 
-  // Boot sequence: show NIRA loading screen, then immediately switch to the welcome
-  // greeting (which is a full-screen fixed overlay, so it covers the app — no gap).
+  // Boot: loading screen -> greeting; sign in anonymously + load saved name.
   useEffect(() => {
     const hideLoading = setTimeout(() => setLoading(false), 1400)
     const showWelcome = setTimeout(() => setShowGreeting(true), 1400)
-    // Report device type + any client-visible apps so "list apps" works on
-    // every platform (Android / iOS / PC), not just Windows.
     reportDeviceApps()
+    authReady()
+      .then((uid) => {
+        if (!uid) return signInAnon() // first visit -> anonymous account
+        return uid
+      })
+      .then(() => loadName())
+      .then((saved) => {
+        setAuthReadyState(true)
+        if (saved) {
+          setName(saved)
+          setShowNameModal(false)
+        } else {
+          setShowNameModal(true)
+        }
+      })
+      .catch(() => {
+        // Firebase unavailable (offline / not configured) — degrade to a
+        // local-only name prompt without crashing the app.
+        setAuthReadyState(true)
+        setShowNameModal(true)
+      })
     return () => { clearTimeout(hideLoading); clearTimeout(showWelcome) }
   }, [])
 
@@ -74,40 +106,55 @@ export default function App() {
     apiFetch('/tools/keys').then((r) => r.ok && setToolKeys((r.data && r.data.keys) || {}))
   }
 
-  // Load saved chat sessions for THIS device (localStorage, not the server).
+  // Load saved chat sessions for THIS anonymous user (Firestore).
   const refreshSessions = () => {
-    setSessions(listSessions())
+    listSessions().then(setSessions).catch(() => {})
   }
 
-  // Start a fresh session: new device-scoped id, empty transcript.
+  // Persist the current transcript to Firestore (called after each reply).
+  const persist = () => {
+    const msgs = messagesRef.current
+    if (!msgs.length) return
+    const title = (msgs.find((m) => m.role === 'user')?.content || 'New chat')
+      .slice(0, 80)
+    saveSession(sessionId, title, msgs).catch(() => {})
+  }
+
   const handleNewChat = () => {
-    const id = getDeviceSessionId()
-    upsertSession(id, 'New chat')
+    const id = `web-${uuid()}`
     setSessionIdState(id)
     nira.setSessionId(id)
     nira.loadMessages([])
     setActivePage('chat')
-    refreshSessions()
   }
 
-  // Resume a past session: load its messages into the transcript.
+  // Resume a past session: load its messages from Firestore.
   const handleResume = (sid) => {
     setSessionIdState(sid)
     nira.setSessionId(sid)
-    nira.loadMessages(nira.getMessages ? nira.getMessages() : [])
+    loadSessionSafe(sid)
     setActivePage('chat')
   }
 
+  const loadSessionSafe = (sid) => {
+    import('./firebase').then((m) =>
+      m.loadSession(sid).then((s) => nira.loadMessages(s.messages || [])).catch(() => {}),
+    )
+  }
+
   const handleRename = (sid, title) => {
-    if (!title || !title.trim()) return
-    renameSession(sid, title.trim())
+    // Firestore session titles are derived on save; rename is a no-op here
+    // but we keep the call harmless. (Lightweight: re-save with new title.)
+    const existing = sessions.find((s) => s.sid === sid)
+    if (existing) saveSession(sid, title || existing.title, []).catch(() => {})
     refreshSessions()
   }
 
   const handleDelete = (sid) => {
-    deleteSession(sid)
-    if (sid === sessionId) handleNewChat()
-    refreshSessions()
+    deleteSessionFs(sid).then(() => {
+      if (sid === sessionId) handleNewChat()
+      refreshSessions()
+    }).catch(() => {})
   }
 
   // Load persisted feature toggles once on mount.
@@ -135,7 +182,7 @@ export default function App() {
   const voiceOnRef = useRef(voiceOn)
   voiceOnRef.current = voiceOn
 
-  const nira = useNira('web', {
+  const nira = useNira(sessionId, {
     onModelSwitch: (to) => {
       setToast(`Switched to ${to} (limit reached)`)
       setTimeout(() => setToast(''), 3500)
@@ -144,6 +191,7 @@ export default function App() {
       // Final transcript received — flush any remaining buffered speech so the
       // last (possibly punctuation-less) sentence is spoken.
       enqueueNira('', { stream: true, flush: true })
+      persist()
     },
     onText: (chunk) => {
       if (voiceOnRef.current) enqueueNira(chunk, { stream: true })
@@ -151,6 +199,8 @@ export default function App() {
   })
 
   const { messages, coreState, activeTool, status, tools, models, currentModel, selectModel, greet, sendMessage } = nira
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
 
   const { supported: voiceSupported, micActive, startMic, stopMic, speak } = useVoice({
     enabled: voiceOn,
@@ -175,14 +225,12 @@ export default function App() {
   const toggleVoice = () => setVoiceOn((v) => !v)
 
   const handleName = (n) => {
-    localStorage.setItem(NAME_KEY, n)
     setName(n)
     setShowNameModal(false)
-    fetch(apiUrl('/prefs/name'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: n, session_id: 'web' }),
-    }).catch(() => {})
+    // Anonymous sign-up + save name to Firestore (no visible login).
+    signInAnon()
+      .then(() => saveName(n))
+      .catch(() => {})
     greet(n)
     speakNira(`Hello, ${n}. How can I help you today?`)
   }

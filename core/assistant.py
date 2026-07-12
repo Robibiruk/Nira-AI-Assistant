@@ -65,10 +65,17 @@ def _enabled_feature_prompt() -> str:
 
 
 class Assistant:
-    def __init__(self, session_id: str = "default") -> None:
+    def __init__(
+        self,
+        session_id: str = "default",
+        history: "list[dict] | None" = None,
+        name: str = "",
+    ) -> None:
         self.session_id = session_id
-        self.memory = Memory()
-        self.memory.ensure_session(session_id)
+        # History + name now arrive from the CLIENT (Firestore, anonymous UID)
+        # so nothing is shared on the server. No SQLite session store.
+        self.history: list[dict] = list(history or [])
+        self.name = name or ""
         self.client = MultiProviderClient(
             runtime.providers(), runtime.get_model(), TEMPERATURE
         )
@@ -85,34 +92,23 @@ class Assistant:
         enabled = _enabled_feature_prompt()
         if enabled:
             messages.append({"role": "system", "content": enabled})
-        name = self.memory.get_pref("name")
-        if name:
+        if self.name:
             messages.append(
-                {"role": "system", "content": f"The user's name is {name}."}
+                {"role": "system", "content": f"The user's name is {self.name}."}
             )
-        messages.extend(self.memory.get_history(self.session_id))
+        # Client-supplied history (most-recent turns) for context.
+        messages.extend(self.history)
         messages.append({"role": "user", "content": user_text})
         return messages
 
     def ask(self, user_text: str) -> str:
         try:
-            self.memory.save_message(self.session_id, "user", user_text)
-            # Auto-title the session from its first user message only.
-            if len(self.memory.get_history(self.session_id, limit=1)) <= 1:
-                self.memory.rename_session(self.session_id, self._auto_title(user_text))
-            self.memory.touch_session(self.session_id)
             messages = self._build_messages(user_text)
             schemas = get_schemas()
             reply = ""
             for ev in self._run_loop_stream(messages, schemas):
                 if ev.get("type") == "final":
                     reply = ev["content"]
-            self.memory.save_message(self.session_id, "assistant", reply)
-
-            # Lightweight preference memory: learn the user's name.
-            lowered = user_text.lower()
-            if lowered.startswith("my name is "):
-                self.memory.set_pref("name", user_text.split("is ", 1)[1].strip())
             return reply or "(no response)"
         except ProviderError as exc:
             return f"[NIRA error] {exc}"
@@ -247,13 +243,11 @@ class Assistant:
 
         Events: meta, state (thinking|executing|speaking|idle|error),
         model_switch, tool_result, message, error.
+
+        History/title/name persistence now lives on the CLIENT (Firestore,
+        per anonymous UID) — this method only orchestrates the model + tools.
         """
         try:
-            self.memory.save_message(self.session_id, "user", user_text)
-            # Auto-title the session from its first user message only.
-            if len(self.memory.get_history(self.session_id, limit=1)) <= 1:
-                self.memory.rename_session(self.session_id, self._auto_title(user_text))
-            self.memory.touch_session(self.session_id)
             messages = self._build_messages(user_text)
             schemas = get_schemas()
 
@@ -274,14 +268,6 @@ class Assistant:
                     speaking_started = True
                     yield {"type": "state", "state": "speaking"}
                 yield ev
-
-            if final:
-                self.memory.save_message(self.session_id, "assistant", final)
-                lowered = user_text.lower()
-                if lowered.startswith("my name is "):
-                    self.memory.set_pref(
-                        "name", user_text.split("is ", 1)[1].strip()
-                    )
 
             if not speaking_started:
                 yield {"type": "state", "state": "speaking"}

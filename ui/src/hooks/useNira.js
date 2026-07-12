@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiFetch, apiUrl } from '../api'
 import { SLASH_COMMANDS, parseSlash } from '../slash'
+import { loadName } from '../firebase'
 
 // Tool catalogue shown in the side panel. `id` must match the tool name the
 // backend reports in tool_result/executing events so the active highlight works.
@@ -27,6 +28,10 @@ const TOOLS = [
 export function useNira(sessionId = 'web', options = {}) {
   const { onModelSwitch, onReply, onText } = options
   const [messages, setMessages] = useState([])
+  const messagesRef = useRef(messages)
+  // Keep a live ref of messages so the streaming POST can read history
+  // without stale closure issues.
+  messagesRef.current = messages
   const [coreState, setCoreState] = useState('idle')
   const [activeTool, setActiveTool] = useState(null)
   const [status, setStatus] = useState({
@@ -180,10 +185,28 @@ export function useNira(sessionId = 'web', options = {}) {
       }
 
       try {
+        // Send the client-owned history + name so the (SQLite-free) server
+        // has context. History = prior turns; the new user message is added
+        // by the server. Name lets it greet personally.
+        const history = messagesRef.current.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }))
+        let name = ''
+        try {
+          name = (await loadName()) || ''
+        } catch {
+          name = ''
+        }
         const res = await fetch(apiUrl('/chat/stream'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: content, session_id: sessionIdRef.current }),
+          body: JSON.stringify({
+            message: content,
+            session_id: sessionIdRef.current,
+            history,
+            name,
+          }),
         })
         if (!res.ok || !res.body) {
           setCoreState('error')
