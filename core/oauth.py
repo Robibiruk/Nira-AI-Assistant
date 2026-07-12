@@ -14,6 +14,8 @@ Security:
 from __future__ import annotations
 
 import os
+import base64
+import hashlib
 import secrets
 import time
 import urllib.parse
@@ -30,6 +32,7 @@ router = APIRouter(prefix="/auth", tags=["oauth"])
 _RETURN_TO = os.getenv("OAUTH_RETURN_TO", "/?tab=settings").strip() or "/?tab=settings"
 
 STATE_COOKIE = "oauth_state"
+VERIFIER_COOKIE = "oauth_verifier"  # PKCE code_verifier (X only)
 STATE_MAX_AGE = 600  # 10 minutes
 
 
@@ -57,6 +60,36 @@ SERVICES = {
         "client_id_env": "SPOTIFY_CLIENT_ID",
         "client_secret_env": "SPOTIFY_CLIENT_SECRET",
         "refreshable": True,
+    },
+    "google": {
+        "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_url": "https://oauth2.googleapis.com/token",
+        "scopes": [
+            "openid",
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/userinfo.profile",
+        ],
+        "client_id_env": "GOOGLE_CLIENT_ID",
+        "client_secret_env": "GOOGLE_CLIENT_SECRET",
+        "refreshable": True,  # offline access -> refresh token
+    },
+    "reddit": {
+        "auth_url": "https://www.reddit.com/api/v1/authorize",
+        "token_url": "https://www.reddit.com/api/v1/access_token",
+        "scopes": ["identity"],
+        "client_id_env": "REDDIT_CLIENT_ID",
+        "client_secret_env": "REDDIT_CLIENT_SECRET",
+        "refreshable": True,
+        "user_agent": "nira/0.1 by u/your_reddit_username",  # Reddit requires a UA
+    },
+    "x": {
+        "auth_url": "https://twitter.com/i/oauth2/authorize",
+        "token_url": "https://api.twitter.com/2/oauth2/token",
+        "scopes": ["tweet.read", "users.read", "offline.access"],
+        "client_id_env": "X_CLIENT_ID",
+        "client_secret_env": "X_CLIENT_SECRET",
+        "refreshable": True,
+        "pkce": True,  # X mandates PKCE for the auth-code flow
     },
 }
 
@@ -112,6 +145,21 @@ def oauth_login(service: str, response: Response, req: Request) -> RedirectRespo
         "state": state,
         "response_type": "code",
     }
+    # PKCE is required by X (Twitter) and harmless elsewhere if omitted.
+    verifier = None
+    if cfg.get("pkce"):
+        verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
+        chal = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+        params["code_challenge"] = chal
+        params["code_challenge_method"] = "S256"
+        response.set_cookie(
+            VERIFIER_COOKIE,
+            verifier,
+            max_age=STATE_MAX_AGE,
+            httponly=True,
+            samesite="lax",
+            secure=not _env("OAUTH_INSECURE_COOKIE"),
+        )
     if cfg.get("refreshable"):
         params["access_type"] = "offline"
         params["prompt"] = "consent"
@@ -135,17 +183,25 @@ def oauth_callback(
     secret = _env(cfg["client_secret_env"])
     if not (cid and secret):
         raise HTTPException(status_code=500, detail=f"{cfg['client_id_env']}/{cfg['client_secret_env']} not set on server.")
+    token_data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": _redirect_uri(service),
+        "client_id": cid,
+        "client_secret": secret,
+    }
+    if cfg.get("pkce"):
+        verifier = req.cookies.get(VERIFIER_COOKIE) if req else None
+        if verifier:
+            token_data["code_verifier"] = verifier
     try:
+        headers = {"Accept": "application/json"}
+        if cfg.get("user_agent"):
+            headers["User-Agent"] = cfg["user_agent"]
         resp = httpx.post(
             cfg["token_url"],
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": _redirect_uri(service),
-                "client_id": cid,
-                "client_secret": secret,
-            },
-            headers={"Accept": "application/json"},
+            data=token_data,
+            headers=headers,
             timeout=15,
         )
         resp.raise_for_status()
@@ -171,6 +227,7 @@ def oauth_callback(
     # Clear state cookie; return to the Integrations UI with a success flag.
     redirect = RedirectResponse(f"{_RETURN_TO}&connected={service}" if "?" in _RETURN_TO else f"{_RETURN_TO}?connected={service}")
     response.delete_cookie(STATE_COOKIE)
+    response.delete_cookie(VERIFIER_COOKIE)
     return redirect
 
 

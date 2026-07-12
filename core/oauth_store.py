@@ -105,6 +105,14 @@ def _collection():
                 # Support a DB name embedded in the URI (".../dbname?...").
                 _db = _client.get_database(db_name)
                 _client.admin.command("ping")
+                # Ensure the collection + a unique index exist up-front so the
+                # DB shows up in Atlas even before the first token is saved.
+                col = _db[_COLLECTION]
+                col.create_index(
+                    [("user_id", 1), ("service", 1)],
+                    unique=True,
+                    name="user_service_unique",
+                )
             except Exception:
                 _client = None
                 _db = None
@@ -190,6 +198,36 @@ def list_status(services: list[str]) -> dict:
 # Scopes that grant a refresh token, keyed by service name.
 _REFRESH_SCOPES = {
     "spotify": ["user-read-playback-state", "user-read-currently-playing"],
+    "google": ["openid", "https://www.googleapis.com/auth/userinfo.email",
+               "https://www.googleapis.com/auth/userinfo.profile"],
+    "reddit": ["identity"],
+    "x": ["tweet.read", "users.read", "offline.access"],
+}
+
+# Token-refresh endpoints + credential env vars, keyed by service.
+# Kept here (not imported from core.oauth) to avoid a circular import.
+_REFRESH_CFG = {
+    "spotify": {
+        "token_url": "https://accounts.spotify.com/api/token",
+        "client_id_env": "SPOTIFY_CLIENT_ID",
+        "client_secret_env": "SPOTIFY_CLIENT_SECRET",
+    },
+    "google": {
+        "token_url": "https://oauth2.googleapis.com/token",
+        "client_id_env": "GOOGLE_CLIENT_ID",
+        "client_secret_env": "GOOGLE_CLIENT_SECRET",
+    },
+    "reddit": {
+        "token_url": "https://www.reddit.com/api/v1/access_token",
+        "client_id_env": "REDDIT_CLIENT_ID",
+        "client_secret_env": "REDDIT_CLIENT_SECRET",
+        "user_agent": "nira/0.1 by u/your_reddit_username",
+    },
+    "x": {
+        "token_url": "https://api.twitter.com/2/oauth2/token",
+        "client_id_env": "X_CLIENT_ID",
+        "client_secret_env": "X_CLIENT_SECRET",
+    },
 }
 
 
@@ -197,19 +235,16 @@ def refresh_token(service: str, current_refresh: str) -> dict | None:
     """Exchange a refresh token for a fresh access token. Returns the updated
     record dict (encrypted & persisted) or None if the service isn't refreshable
     or the refresh failed."""
-    cfg = {
-        "spotify": {
-            "token_url": "https://accounts.spotify.com/api/token",
-            "client_id_env": "SPOTIFY_CLIENT_ID",
-            "client_secret_env": "SPOTIFY_CLIENT_SECRET",
-        },
-    }.get(service)
+    cfg = _REFRESH_CFG.get(service)
     if not cfg:
         return None
     cid = (os.getenv(cfg["client_id_env"]) or "").strip()
     secret = (os.getenv(cfg["client_secret_env"]) or "").strip()
     if not (cid and secret):
         return None
+    headers = {"Accept": "application/json"}
+    if cfg.get("user_agent"):
+        headers["User-Agent"] = cfg["user_agent"]
     try:
         resp = httpx.post(
             cfg["token_url"],
@@ -219,7 +254,7 @@ def refresh_token(service: str, current_refresh: str) -> dict | None:
                 "client_id": cid,
                 "client_secret": secret,
             },
-            headers={"Accept": "application/json"},
+            headers=headers,
             timeout=15,
         )
         resp.raise_for_status()

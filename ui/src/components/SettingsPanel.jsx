@@ -1,11 +1,22 @@
 import { useEffect, useState } from 'react'
 import { apiFetch, apiError } from '../api'
 
+const KNOWN = [
+  { name: 'ollama', base_url: 'http://localhost:11434/v1', hint: 'Local Ollama' },
+  { name: 'lmstudio', base_url: 'http://localhost:1234/v1', hint: 'Local LM Studio' },
+  { name: 'gemini', base_url: 'https://generativelanguage.googleapis.com/v1beta/openai/', hint: 'Google Gemini (OpenAI-compat)' },
+  { name: 'openai', base_url: 'https://api.openai.com/v1', hint: 'OpenAI' },
+  { name: 'zen', base_url: 'https://api.openai.com/v1', hint: 'zen (OpenAI-compat)' },
+]
+
 // Services that support OAuth in the backend. Key-based / no-auth services
 // keep the manual key-input below and are not listed here.
 const OAUTH_SERVICES = [
   { id: 'github', label: 'GitHub', desc: 'Repos, issues, user (per-user token)' },
   { id: 'spotify', label: 'Spotify', desc: 'Music search + now playing' },
+  { id: 'google', label: 'Google', desc: 'Email, Calendar, Drive (per-user)' },
+  { id: 'reddit', label: 'Reddit', desc: 'Identity / reading' },
+  { id: 'x', label: 'X', desc: 'Posts, user read (PKCE)' },
 ]
 
 const KEY_SERVICES = [
@@ -70,19 +81,6 @@ export default function SettingsPanel({ providers, custom, toolKeys = {}, onAdd,
     } finally {
       setOauthBusy('')
     }
-  }
-
-  const TOOL_HINTS = {
-    google: 'Google (Search, YouTube, Calendar, Gmail)',
-    github: 'GitHub (repos, issues, user)',
-    translate: 'Translate service (DeepL / Google Translate)',
-    wikipedia: 'Wikipedia',
-    reddit: 'Reddit',
-    x: 'X.com (Twitter)',
-    youtube: 'YouTube Data API',
-    spotify: 'Spotify OAuth Bearer token (starts with BQ)',
-    email: 'Email (SMTP)',
-    clipboard: 'Clipboard (local, no key)',
   }
 
   const submitTool = async (e) => {

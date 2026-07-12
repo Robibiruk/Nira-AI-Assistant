@@ -21,6 +21,7 @@ export async function apiFetch(path, opts = {}) {
   let res
   try {
     res = await fetch(apiUrl(path), {
+      credentials: 'include', // send/receive auth cookies cross-origin (OAuth state)
       headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
       ...opts,
     })
