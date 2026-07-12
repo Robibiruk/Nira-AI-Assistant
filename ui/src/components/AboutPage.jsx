@@ -42,12 +42,13 @@ function Stat({ num, label, run }) {
 }
 
 // Reveal-on-scroll wrapper
-function Reveal({ children, delay = 0, className = '' }) {
+function Reveal({ children, delay = 0, className = '', id }) {
   const ref = useRef(null)
   const inView = useInView(ref, { once: true, margin: '-60px' })
   return (
     <motion.div
       ref={ref}
+      id={id}
       className={className}
       initial={{ opacity: 0, y: 24 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -91,7 +92,7 @@ const QUICK_LINKS = [
   { icon: ListChecks, title: 'Changelog', desc: 'What changed recently', href: 'https://github.com/Robibiruk/Nira-AI-Assistant/releases' },
   { icon: Code, title: 'GitHub Repository', desc: 'Source code', href: 'https://github.com/Robibiruk/Nira-AI-Assistant' },
   { icon: AlertCircle, title: 'Report an Issue', desc: 'Found a bug?', href: 'https://github.com/Robibiruk/Nira-AI-Assistant/issues/new' },
-  { icon: Lightbulb, title: 'Request a Feature', desc: 'Suggest an idea', href: 'mailto:natim7520@gmail.com' },
+  { icon: Lightbulb, title: 'Request a Feature', desc: 'Suggest an idea', href: '#feedback' },
 ]
 
 const ROAD_DONE = ['Smart Chat', 'Browser', 'File Tools', 'Research', 'Voice Assistant']
@@ -157,8 +158,20 @@ export default function AboutPage() {
         <Reveal className="na-col-4" delay={0.08}>
           <section className="na-panel na-quicklinks">
             <h2 className="na-h3">Quick Links</h2>
-            {QUICK_LINKS.map((l) => (
-              <a key={l.title} className="na-ql-item" href={l.href} target="_blank" rel="noreferrer">
+            {QUICK_LINKS.map((l) => {
+              const internal = l.href.startsWith('#')
+              return (
+                <a
+                  key={l.title}
+                  className="na-ql-item"
+                  href={l.href}
+                  target={internal ? undefined : '_blank'}
+                  rel={internal ? undefined : 'noreferrer'}
+                  onClick={internal ? (e) => {
+                    e.preventDefault()
+                    document.getElementById(l.href.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  } : undefined}
+                >
                 <span className="na-ql-icon"><l.icon size={18} /></span>
                 <span className="na-ql-text">
                   <span className="na-ql-title">{l.title}</span>
@@ -166,7 +179,8 @@ export default function AboutPage() {
                 </span>
                 <ChevronRight className="na-ql-chev" size={16} />
               </a>
-            ))}
+              )
+            })}
             <a className="na-btn na-btn--purple" href="https://github.com/Robibiruk/Nira-AI-Assistant" target="_blank" rel="noreferrer">
               <Star size={16} /> Star on GitHub
             </a>
@@ -327,7 +341,7 @@ export default function AboutPage() {
         </Reveal>
 
         {/* Feedback & Contact (full) — Formspree, before footer */}
-        <Reveal className="na-col-12">
+        <Reveal className="na-col-12" id="feedback">
           <FeedbackForm />
         </Reveal>
 
