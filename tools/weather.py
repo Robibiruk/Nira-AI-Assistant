@@ -67,8 +67,26 @@ class WeatherTool(Tool):
                 timeout=15,
             ).json()
             cur = fc.get("current", {})
+            # Open-Meteo sometimes returns an empty "current" block on the
+            # first call (esp. from datacenter IPs / rate limits). Retry once
+            # with the minimal single-field request before giving up.
             if not cur:
-                return f"Got the location for {display} but no forecast data."
+                fc = httpx.get(
+                    _FORECAST_URL,
+                    params={
+                        "latitude": lat,
+                        "longitude": lon,
+                        "current": "temperature_2m",
+                    },
+                    timeout=15,
+                ).json()
+                cur = fc.get("current", {})
+            if not cur:
+                return (
+                    f"Found {display} but the weather service returned no "
+                    "current conditions (it may be rate-limited right now). "
+                    "Try again in a moment."
+                )
             temp = cur.get("temperature_2m")
             code = cur.get("weather_code")
             humidity = cur.get("relative_humidity_2m")

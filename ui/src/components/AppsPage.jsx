@@ -23,6 +23,7 @@ export default function AppsPage({ onSend }) {
   const [tab, setTab] = useState('installed') // installed | windows | tabs
   const [busy, setBusy] = useState('') // title being acted on
   const timerRef = useRef(null)
+  const clientDevice = detectDevice()
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -31,7 +32,6 @@ export default function AppsPage({ onSend }) {
     // server's own OS is irrelevant (e.g. Linux/flathub) — we want the
     // client's platform so the store link (Play Store / App Store / etc.) is
     // correct and the app list comes from the device report.
-    const clientDevice = detectDevice()
     try {
       const res = await apiFetch('/device/apps')
       if (res.ok && res.data) {
@@ -90,6 +90,11 @@ export default function AppsPage({ onSend }) {
             NIRA can list your installed apps, open windows, and browser tabs, and switch
             to or close them for you. Nothing leaves your machine — it's all local.
           </p>
+          <p className="perm-note">
+            Note: from a web browser NIRA can't read your installed apps (browsers
+            block that for privacy). App listing works fully when NIRA runs on your
+            Windows or Mac desktop. On this device you'll see your store below.
+          </p>
           <div className="perm-actions">
             <button className="btn-primary" onClick={() => { localStorage.setItem(PERM_KEY, '1'); setGranted(true) }}>
               Allow access
@@ -139,7 +144,11 @@ export default function AppsPage({ onSend }) {
   const renderInstalled = () => (
     <div className="app-grid">
       {data.installed.length === 0 ? (
-        <div className="empty">No installed apps detected (Windows-only).</div>
+        <div className="empty">
+          {clientDevice === 'windows'
+            ? 'No installed apps detected.'
+            : "NIRA can't read installed apps from a web browser (browsers block it for privacy). App listing works when NIRA runs on your Windows/Mac desktop."}
+        </div>
       ) : (
         data.installed.map((a, i) => (
           <button key={i} className="app-tile" onClick={() => launch(a.name)} disabled={busy === a.name}>

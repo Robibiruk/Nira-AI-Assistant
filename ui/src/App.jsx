@@ -7,6 +7,7 @@ import ChatInput from './components/ChatInput'
 import SettingsPanel from './components/SettingsPanel'
 import NameModal from './components/NameModal'
 import MemoryPage from './components/MemoryPage'
+import { getDeviceSessionId, listSessions, upsertSession, renameSession, deleteSession } from './sessions'
 import AppsPage from './components/AppsPage'
 import BrowserPage from './components/BrowserPage'
 import ResearchPage from './components/ResearchPage'
@@ -49,8 +50,8 @@ export default function App() {
   const [custom, setCustom] = useState([])
   const [toolKeys, setToolKeys] = useState({})
   const [features, setFeatures] = useState({})
-  const [sessionId, setSessionIdState] = useState(() => `web-${Date.now()}`)
-  const [sessions, setSessions] = useState([])
+  const [sessionId, setSessionIdState] = useState(() => getDeviceSessionId())
+  const [sessions, setSessions] = useState(() => listSessions())
   const [loading, setLoading] = useState(true)
   const [showGreeting, setShowGreeting] = useState(false)
 
@@ -73,44 +74,40 @@ export default function App() {
     apiFetch('/tools/keys').then((r) => r.ok && setToolKeys((r.data && r.data.keys) || {}))
   }
 
-  // Load saved chat sessions (with auto titles) for the Memory page.
+  // Load saved chat sessions for THIS device (localStorage, not the server).
   const refreshSessions = () => {
-    apiFetch('/sessions').then((r) => r.ok && setSessions((r.data && r.data.sessions) || []))
+    setSessions(listSessions())
   }
 
-  // Start a fresh session: new id, empty transcript.
+  // Start a fresh session: new device-scoped id, empty transcript.
   const handleNewChat = () => {
-    const id = `web-${Date.now()}`
+    const id = getDeviceSessionId()
+    upsertSession(id, 'New chat')
     setSessionIdState(id)
     nira.setSessionId(id)
     nira.loadMessages([])
     setActivePage('chat')
+    refreshSessions()
   }
 
   // Resume a past session: load its messages into the transcript.
   const handleResume = (sid) => {
-    apiFetch(`/sessions/${sid}`).then((r) => {
-      if (!r.ok) return
-      setSessionIdState(sid)
-      nira.setSessionId(sid)
-      nira.loadMessages(r.data.messages || [])
-      setActivePage('chat')
-    })
+    setSessionIdState(sid)
+    nira.setSessionId(sid)
+    nira.loadMessages(nira.getMessages ? nira.getMessages() : [])
+    setActivePage('chat')
   }
 
   const handleRename = (sid, title) => {
     if (!title || !title.trim()) return
-    apiFetch('/sessions/rename', {
-      method: 'POST',
-      body: JSON.stringify({ sid, title: title.trim() }),
-    }).then(() => refreshSessions())
+    renameSession(sid, title.trim())
+    refreshSessions()
   }
 
   const handleDelete = (sid) => {
-    apiFetch('/sessions/delete', {
-      method: 'POST',
-      body: JSON.stringify({ sid }),
-    }).then(() => refreshSessions())
+    deleteSession(sid)
+    if (sid === sessionId) handleNewChat()
+    refreshSessions()
   }
 
   // Load persisted feature toggles once on mount.
