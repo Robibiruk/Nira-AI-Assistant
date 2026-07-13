@@ -48,10 +48,12 @@ from tools.search_social import social_search_tool
 from tools.search_web import web_search_tool
 from tools.search_youtube import youtube_search_tool
 from tools.tavily_search import tavily_search_tool
+from tools.browse import browse_tool
 
 ALL_TOOLS = [
     # Core system tools
     browser_tool,
+    browse_tool,
     terminal_tool,
     *file_tools,
     app_tool,
