@@ -1,18 +1,17 @@
 """Spotify tool: search + now-playing via the Web API.
 
-Token is stored in config/tool_keys.json under name 'spotify' (Settings ->
-Tool Connections). A full OAuth flow is out of scope; the stored token is
-used for search and playback-control calls.
+Token resolution order:
+  1. User-connected OAuth token (per-user, from the Connect flow).
+  2. Manually-pasted token (env SPOTIFY_API_KEY or UI Tool Connection).
+  3. Auto-fetched via Client Credentials (env SPOTIFY_CLIENT_ID/SECRET).
 
-IMPORTANT: Spotify requires an OAuth 2.0 Bearer token (access token), NOT just
-a Client ID or Client Secret. To get a token:
-1. Create a Spotify Developer app at https://developer.spotify.com/dashboard/
-2. Use the Client Credentials flow or Authorization Code flow to obtain an access token
-3. Store the access token (not the Client ID) in Settings -> Tool Connections as 'spotify'
-
-For testing, you can get a temporary token from:
-- https://developer.spotify.com/console/get-search-item/ (use the "Get Token" button)
-- Or use: curl -X POST "https://accounts.spotify.com/api/token" -H "Content-Type: application/x-www-form-urlencoded" -d "grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET"
+IMPORTANT: Spotify requires an OAuth 2.0 Bearer access token, NOT just a
+Client ID/Secret. Get a token from:
+  https://developer.spotify.com/console/get-search-item/  (Get Token button)
+or via the Client Credentials flow:
+  curl -X POST "https://accounts.spotify.com/api/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "grant_type=client_credentials&client_id=ID&client_secret=SECRET"
 """
 from __future__ import annotations
 
@@ -29,10 +28,19 @@ _TOKEN_URL = "https://accounts.spotify.com/api/token"
 _token_cache = {"token": None, "expires": 0.0}
 
 
+class SpotifyAuthError(Exception):
+    """Raised for 401/403 so run() can return an actionable message."""
+
+    def __init__(self, status: int, message: str):
+        self.status = status
+        self.message = message
+        super().__init__(message)
+
+
 def _client_credentials_token() -> str | None:
     """Fetch a fresh app access token via Client Credentials flow, using the
-    SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET env vars (the durable way to run
-    Spotify on an ephemeral host like Render). Returns None if not configured."""
+    SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET env vars. Returns None if not
+    configured."""
     import os
     import time
 
@@ -74,29 +82,6 @@ def _resolve_token() -> str:
         return tok
     # 3) Auto-fetched via Client Credentials (env CLIENT_ID/SECRET).
     return _client_credentials_token() or ""
-
-
-class SpotifyTool(Tool):
-    name = "spotify"
-    description = (
-        "Search Spotify for tracks, artists, or playlists, and get the user's "
-        "currently playing track. Requires a Spotify token stored as the "
-        "'spotify' tool key. Use when the user mentions music, a song, or artist."
-    )
-    parameters = {
-        "query": {"type": "string", "description": "Search term, e.g. 'lofi beats'."},
-        "kind": {"type": "string", "description": "'track' (default), 'artist', or 'playlist'."},
-        "limit": {"type": "integer", "description": "Number of results (default 5)."},
-    }
-    required = ["query"]
-
-class SpotifyAuthError(Exception):
-    """Raised for 401/403 so run() can return an actionable message."""
-
-    def __init__(self, status: int, message: str):
-        self.status = status
-        self.message = message
-        super().__init__(message)
 
 
 def _search_with(token: str, query: str, kind: str, limit: int) -> str:
@@ -143,6 +128,20 @@ def _search_with(token: str, query: str, kind: str, limit: int) -> str:
             lines.append(f"- {name} — {artists}\n {url}")
     return f"Spotify {kind}s for '{query}':\n" + "\n".join(lines[:limit])
 
+
+class SpotifyTool(Tool):
+    name = "spotify"
+    description = (
+        "Search Spotify for tracks, artists, or playlists, and get the user's "
+        "currently playing track. Requires a Spotify token stored as the "
+        "'spotify' tool key. Use when the user mentions music, a song, or artist."
+    )
+    parameters = {
+        "query": {"type": "string", "description": "Search term, e.g. 'lofi beats'."},
+        "kind": {"type": "string", "description": "'track' (default), 'artist', or 'playlist'."},
+        "limit": {"type": "integer", "description": "Number of results (default 5)."},
+    }
+    required = ["query"]
 
     def run(self, query: str, kind: str = "track", limit: int = 5) -> str:
         token = _resolve_token()
