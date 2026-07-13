@@ -6,6 +6,7 @@ function timeNow() {
 }
 const TOOL_META = {
   open_browser: { icon: '🌐', title: 'Browser', verb: 'Opened' },
+  web: { icon: '🌐', title: 'Web', verb: 'Researched' },
   open_app: { icon: '⚙', title: 'App', verb: 'Opened' },
   get_weather: { icon: '🌤', title: 'Weather', verb: 'Checked' },
   web_search: { icon: '🔍', title: 'Web Search', verb: 'Searched' },

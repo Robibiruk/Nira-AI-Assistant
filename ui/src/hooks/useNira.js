@@ -39,6 +39,7 @@ const TOOLS = [
   { id: 'write_file', label: 'Files', icon: '✎' },
   { id: 'list_directory', label: 'Files', icon: '🗂' },
   { id: 'open_browser', label: 'Browser', icon: '🌐' },
+  { id: 'web', label: 'Web', icon: '🌐' },
   { id: 'open_app', label: 'Apps', icon: '⚙' },
   { id: 'get_weather', label: 'Weather', icon: '🌤' },
   { id: 'web_search', label: 'Web', icon: '🔍' },
