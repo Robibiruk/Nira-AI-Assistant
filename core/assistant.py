@@ -220,6 +220,9 @@ class Assistant:
                     if isinstance(piece, dict) and piece.get("_toolcall"):
                         toolcall_seen = True
                         break
+                    if isinstance(piece, dict) and piece.get("_reasoning"):
+                        yield {"type": "reasoning", "content": piece["_reasoning"]}
+                        continue
                     full.append(piece)
                     yield {"type": "text", "content": piece}
                 if toolcall_seen:

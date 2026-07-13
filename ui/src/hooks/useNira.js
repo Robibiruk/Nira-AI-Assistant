@@ -188,6 +188,24 @@ export function useNira(sessionId = 'web', options = {}) {
               setStatus((s) => ({ ...s, latency: `${(ms / 1000).toFixed(1)} s` }))
             }
             break
+          case 'reasoning':
+            // Incremental reasoning chunk — append to the streaming
+            // assistant message's `reasoning` field so it can be shown in a
+            // collapsible "Thinking" block. Only appears if the model emits it.
+            setMessages((m) => {
+              const copy = m.slice()
+              const last = copy[copy.length - 1]
+              if (last && last.role === 'assistant' && last.streaming) {
+                copy[copy.length - 1] = {
+                  ...last,
+                  reasoning: (last.reasoning || '') + ev.content,
+                }
+              } else {
+                copy.push({ role: 'assistant', content: '', reasoning: ev.content, streaming: true })
+              }
+              return copy
+            })
+            break
           case 'text':
             // Incremental token chunk — append to the streaming assistant
             // message and hand it to the voice layer for sentence TTS.

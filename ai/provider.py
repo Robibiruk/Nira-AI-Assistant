@@ -221,10 +221,12 @@ class MultiProviderClient:
         """Yield incremental content deltas (str) as the model streams.
 
         Uses the provider's OpenAI-compatible SSE endpoint. Yields plain ``str``
-        chunks for text. If the model emits tool calls, yields the dict
-        ``{"_toolcall": True}`` as a signal so the caller can fall back to the
-        non-streaming chat() for that step (tool parsing needs the full,
-        structured response).
+        chunks for text. Reasoning tokens (if the model emits them) are yielded
+        as ``{"_reasoning": <str>}`` dicts so the caller can surface the
+        model's thinking alongside the answer. If the model emits tool calls,
+        yields the dict ``{"_toolcall": True}`` as a signal so the caller can
+        fall back to the non-streaming chat() for that step (tool parsing needs
+        the full, structured response).
         """
         if not self.providers:
             raise ProviderError("No LLM providers configured.")
@@ -250,6 +252,7 @@ class MultiProviderClient:
                             provider=p.name,
                         )
                     saw_toolcall = False
+                    in_think = False  # tracks <think:6124c78e>…</think:6124c78e> blocks inside content
                     for line in resp.iter_lines():
                         if not line:
                             continue
@@ -270,7 +273,39 @@ class MultiProviderClient:
                                     saw_toolcall = True
                                     yield {"_toolcall": True}
                                 continue
+                            # Native reasoning field (OpenRouter/DeepSeek style).
+                            r = delta.get("reasoning") or delta.get("reasoning_content") or ""
+                            if r:
+                                yield {"_reasoning": r}
                             piece = delta.get("content") or ""
+                            if not piece:
+                                continue
+                            # Fallback: parse <think:6124c78e>…</think:6124c78e> reasoning tags that
+                            # some providers (DeepSeek R1) embed inside content.
+                            if "<think:6124c78e>" in piece or "</think:6124c78e>" in piece or in_think:
+                                buf = piece
+                                # Handle the open/close toggling across chunks.
+                                while buf:
+                                    if in_think:
+                                        end = buf.find("</think:6124c78e>")
+                                        if end == -1:
+                                            yield {"_reasoning": buf}
+                                            buf = ""
+                                        else:
+                                            yield {"_reasoning": buf[:end]}
+                                            buf = buf[end + len("</think:6124c78e>"):]
+                                            in_think = False
+                                    else:
+                                        start = buf.find("<think:6124c78e>")
+                                        if start == -1:
+                                            yield buf
+                                            buf = ""
+                                        else:
+                                            if start > 0:
+                                                yield buf[:start]
+                                            buf = buf[start + len("<think:6124c78e>"):]
+                                            in_think = True
+                                continue
                             if piece:
                                 yield piece
         except httpx.HTTPError as exc:

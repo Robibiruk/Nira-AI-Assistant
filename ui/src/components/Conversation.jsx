@@ -112,6 +112,12 @@ export default function Conversation({ messages, streaming }) {
                   <img className="msg-image" src={m.image} alt="screenshot" />
                 </a>
               )}
+              {m.reasoning ? (
+                <details className="reasoning-block" open>
+                  <summary>💡 Reasoning</summary>
+                  <div className="reasoning-text">{m.reasoning}</div>
+                </details>
+              ) : null}
               {m.content}
             </div>
           </div>

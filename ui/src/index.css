@@ -626,6 +626,43 @@ body::before {
   border-top-left-radius: 6px;
 }
 
+/* Collapsible model reasoning (think) block — only rendered when the
+   model emits reasoning tokens (e.g. DeepSeek R1, Qwen QwQ). */
+.reasoning-block {
+  margin: 0 0 10px;
+  border: 1px dashed rgba(73, 230, 255, 0.35);
+  border-radius: 12px;
+  background: rgba(73, 230, 255, 0.05);
+  padding: 6px 10px;
+}
+.reasoning-block > summary {
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(73, 230, 255, 0.85);
+  list-style: none;
+}
+.reasoning-block > summary::-webkit-details-marker { display: none; }
+.reasoning-block > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+.reasoning-block[open] > summary::before {
+  transform: rotate(90deg);
+}
+.reasoning-text {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(220, 235, 245, 0.7);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+}
+
 /* Typing indicator */
 .typing {
   display: flex;
