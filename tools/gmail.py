@@ -50,10 +50,27 @@ class GmailTool(Tool):
         try:
             ls = httpx.get(f"{_GMAIL}/messages", params=params, headers=hdrs, timeout=20)
             if ls.status_code == 403:
+                body = ""
+                try:
+                    body = (ls.json().get("error", {}).get("message") or "")
+                except Exception:
+                    pass
+                if "verify" in body.lower() or "not verified" in body.lower():
+                    return (
+                        "Gmail returned 403 — Google says 'This app hasn't verified "
+                        "this app'. Your Google OAuth app is in Testing mode, so only "
+                        "listed Test Users may use it. Fix in Google Cloud Console -> "
+                        "APIs & Services -> OAuth consent screen: set Publishing status "
+                        "to 'Testing' and add YOUR Google email under Test Users, then "
+                        "DISCONNECT and reconnect Google in Nira. (The token is fine — "
+                        "it's a Google gate, not a code bug.)"
+                    )
                 return (
                     "Gmail returned 403 — the connected Google account didn't grant "
                     "the Gmail scope, or access was revoked. Re-connect Google in "
-                    "Settings (disconnect, then Connect) and approve Gmail access."
+                    "Settings (disconnect, then Connect) and approve Gmail access. "
+                    "Also confirm your email is a Test User in the Google Cloud OAuth "
+                    "consent screen if the app is unverified."
                 )
             ls.raise_for_status()
             ids = [m["id"] for m in ls.json().get("messages", [])]
