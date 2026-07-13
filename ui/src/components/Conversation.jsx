@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ShapeGrid from './ShapeGrid'
 
 function timeNow() {
@@ -73,6 +73,39 @@ function ToolCardRich({ tool, content }) {
   )
 }
 
+function ReasoningBlock({ reasoning, thinking }) {
+  // `thinking` = model is still reasoning and has not produced answer text yet.
+  // While thinking: show expanded with an animated "Thinking…" label so the
+  // wait feels alive. Once the answer starts, auto-collapse to a quiet toggle
+  // so the reasoning steps aside and the result leads.
+  const [open, setOpen] = useState(true)
+  const wasThinking = useRef(thinking)
+  useEffect(() => {
+    // On the transition thinking -> answering, collapse once.
+    if (wasThinking.current && !thinking) setOpen(false)
+    wasThinking.current = thinking
+  }, [thinking])
+  const bodyRef = useRef(null)
+  useEffect(() => {
+    // Keep the live reasoning scrolled to the newest line while thinking.
+    if (thinking && open && bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight
+    }
+  }, [reasoning, thinking, open])
+  return (
+    <details className={`reasoning-block${thinking ? ' thinking' : ''}`} open={open}>
+      <summary onClick={(e) => { e.preventDefault(); setOpen((v) => !v) }}>
+        {thinking ? (
+          <span className="thinking-label">💡 Thinking<span className="dots"><i>.</i><i>.</i><i>.</i></span></span>
+        ) : (
+          <span>💡 Reasoning</span>
+        )}
+      </summary>
+      <div className="reasoning-text" ref={bodyRef}>{reasoning}</div>
+    </details>
+  )
+}
+
 export default function Conversation({ messages, streaming }) {
   return (
     <div className="conversation">
@@ -113,10 +146,7 @@ export default function Conversation({ messages, streaming }) {
                 </a>
               )}
               {m.reasoning ? (
-                <details className="reasoning-block" open>
-                  <summary>💡 Reasoning</summary>
-                  <div className="reasoning-text">{m.reasoning}</div>
-                </details>
+                <ReasoningBlock reasoning={m.reasoning} thinking={!!m.streaming && !m.content} />
               ) : null}
               {m.content}
             </div>
