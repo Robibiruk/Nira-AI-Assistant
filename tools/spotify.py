@@ -158,12 +158,16 @@ class SpotifyTool(Tool):
         try:
             return _search_with(token, query, kind, limit)
         except SpotifyAuthError as e:
-            # Actionable 401/403 message. If it was a user-connected token and
-            # an app-level Client Credentials token is available, retry once
-            # with that before giving up.
-            cc = _client_credentials_token() if e.status == 401 and token != (_token_cache.get("token") or "") else None
+            # On 401 (expired) or 403 (connected account not allowlisted for
+            # the app in Dev Mode), fall back to the app-level Client
+            # Credentials token — it works for non-user-scoped endpoints like
+            # search/artist without needing the user account to be authorized.
+            cc = _client_credentials_token() if e.status in (401, 403) and token != (_token_cache.get("token") or "") else None
             if cc and cc != token:
-                return _search_with(cc, query, kind, limit)
+                try:
+                    return _search_with(cc, query, kind, limit)
+                except SpotifyAuthError:
+                    pass  # fall through to the message below
             return e.message
         except httpx.HTTPError as exc:
             return f"Spotify request failed: {exc}"
