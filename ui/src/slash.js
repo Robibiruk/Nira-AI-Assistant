@@ -3,8 +3,8 @@
 // extracts its arguments from the text after the command.
 
 export const SLASH_COMMANDS = [
-  { cmd: 'browse', tool: 'tavily_search', icon: '🧭', label: 'Browse the web (Tavily)',
-    hint: 'e.g. /browse latest AI news', arg: (t) => ({ query: t, search_depth: 'advanced' }) },
+  { cmd: 'browse', tool: 'web', icon: '🌐', label: 'Web research',
+    hint: 'e.g. /browse React 19 new features', arg: (t) => ({ task: t }) },
   { cmd: 'search', tool: 'tavily_search', icon: '🔍', label: 'Web search (Tavily)',
     hint: 'e.g. /search python tips', arg: (t) => ({ query: t, search_depth: 'basic' }) },
   { cmd: 'pubmed', tool: 'pubmed_search', icon: '🧬', label: 'Search PubMed (research)',

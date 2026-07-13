@@ -14,9 +14,9 @@ export default function BrowserPage({ onSend }) {
   return (
     <div className="page">
       <div className="center-header">
-        <h1 className="center-greeting">🌐 Browser</h1>
+        <h1 className="center-greeting">🌐 Web</h1>
         <p className="center-sub">
-          Live web search powered by Tavily. Ask anything current — news, facts, sites.
+          Smart research — reads pages, summarizes articles, extracts facts. Powered by the NIRA browser service.
         </p>
       </div>
 
