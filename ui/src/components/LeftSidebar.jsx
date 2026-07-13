@@ -10,7 +10,7 @@ const NAV = [
   { id: 'chat', label: 'Chat', icon: '💬' },
   { id: 'memory', label: 'Memory', icon: '🧠' },
   { id: 'projects', label: 'Projects', icon: '📁' },
-  { id: 'browser', label: 'Browser', icon: '🌐' },
+  { id: 'browser', label: 'Web', icon: '🌐' },
   { id: 'research', label: 'Research', icon: '🔬' },
   { id: 'about', label: 'About', icon: 'ℹ' },
   { id: 'settings', label: 'Settings', icon: '⚙' },

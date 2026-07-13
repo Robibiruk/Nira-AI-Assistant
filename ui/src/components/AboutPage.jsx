@@ -72,7 +72,7 @@ const FEATURES = [
   { icon: MessageSquare, title: 'Chat', desc: 'Natural, multi-turn conversations with powerful AI models.' },
   { icon: Brain, title: 'Memory', desc: 'Long-term recall of your context, facts and preferences.' },
   { icon: LayoutGrid, title: 'Projects', desc: 'Organize chats, memories and research into workspaces.' },
-  { icon: Globe, title: 'Browser', desc: 'Browse, summarize and act on web content in-app.' },
+  { icon: Globe, title: 'Web', desc: 'Read, summarize and extract from web pages — smart research, no browser required.' },
   { icon: Microscope, title: 'Research', desc: 'Deep research with citations and structured notes.' },
   { icon: Settings, title: 'Settings', desc: 'Fine-tune models, providers, tools and behavior.' },
 ]
@@ -95,7 +95,7 @@ const QUICK_LINKS = [
   { icon: Lightbulb, title: 'Request a Feature', desc: 'Suggest an idea', href: '#feedback' },
 ]
 
-const ROAD_DONE = ['Smart Chat', 'Browser', 'File Tools', 'Research', 'Voice Assistant']
+const ROAD_DONE = ['Smart Chat', 'Web', 'File Tools', 'Research', 'Voice Assistant']
 const ROAD_TODO = ['Plugin Marketplace', 'Mobile App', 'Multi-Agent System', 'Smart Home Integration']
 
 const VERSIONS = [
