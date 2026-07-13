@@ -87,7 +87,18 @@ export default function App() {
   const [custom, setCustom] = useState(() => lsGetCustom())
   const [toolKeys, setToolKeys] = useState({})
   const [features, setFeatures] = useState({})
-  const [sessionId, setSessionIdState] = useState(() => `web-${uuid()}`)
+  const [sessionId, setSessionIdState] = useState(() => {
+    // A stable per-local-profile id used to scope OAuth connections so each
+    // NIRA profile gets its OWN Spotify/Google/etc. tokens (not one shared
+    // account). Firebase uid wins when signed in; otherwise the web session id.
+    let uid = ''
+    try { uid = (localStorage.getItem('nira_uid') || '').trim() } catch { /* ignore */ }
+    if (!uid) {
+      uid = `web-${uuid()}`
+      try { localStorage.setItem('nira_uid', uid) } catch { /* ignore */ }
+    }
+    return uid
+  })
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
   const [showGreeting, setShowGreeting] = useState(false)

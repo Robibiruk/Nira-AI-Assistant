@@ -19,10 +19,17 @@ export function apiUrl(path) {
 
 export async function apiFetch(path, opts = {}) {
   let res
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(opts.headers || {}),
+  }
+  // Per-local-user identity for OAuth scoping (each profile its own tokens).
+  const uid = userId()
+  if (uid) headers['X-User-Id'] = uid
   try {
     res = await fetch(apiUrl(path), {
       credentials: 'include', // send/receive auth cookies cross-origin (OAuth state)
-      headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+      headers,
       ...opts,
     })
   } catch (netErr) {
@@ -51,4 +58,16 @@ export function apiError(result, fallback = 'request failed') {
   }
   if (result.status === 0) return result.text || 'cannot reach server'
   return `${fallback} (HTTP ${result.status})`
+}
+
+// Per-local-user identity for OAuth connections. Each NIRA profile (Firebase
+// anonymous uid, or a local `web-<uuid>` fallback) gets its OWN Spotify/Google
+// tokens instead of all sharing one account. Sent as the `X-User-Id` header and
+// as `?uid=` on the OAuth login redirect.
+export function userId() {
+  try {
+    const u = (localStorage.getItem('nira_uid') || '').trim()
+    if (u) return u
+  } catch { /* ignore */ }
+  return ''
 }

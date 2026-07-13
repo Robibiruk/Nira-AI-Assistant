@@ -37,6 +37,7 @@ _RETURN_TO = (os.getenv("OAUTH_RETURN_TO") or "").strip() or (_WEB_ORIGIN + "/?t
 
 STATE_COOKIE = "oauth_state"
 VERIFIER_COOKIE = "oauth_verifier"  # PKCE code_verifier (X only)
+UID_COOKIE = "oauth_uid"  # which local user initiated the flow (per-user connections)
 STATE_MAX_AGE = 600  # 10 minutes
 
 
@@ -151,7 +152,7 @@ def oauth_storage() -> dict:
 
 
 @router.get("/{service}/login")
-def oauth_login(service: str, response: Response, req: Request) -> RedirectResponse:
+def oauth_login(service: str, response: Response, req: Request, uid: str | None = None) -> RedirectResponse:
     cfg = _service_cfg(service)
     cid = _env(cfg["client_id_env"])
     if not cid:
@@ -160,6 +161,11 @@ def oauth_login(service: str, response: Response, req: Request) -> RedirectRespo
             detail=f"{cfg['client_id_env']} is not set on the server; cannot start {service} OAuth.",
         )
     state = secrets.token_urlsafe(24)
+    # Carry the initiating local user through the flow (per-user connections).
+    # Prefer the ?uid= query param (set by the SPA's Connect button so the
+    # top-level provider redirect still knows who started it); fall back to the
+    # X-User-Id header (used when the login is opened via fetch).
+    uid = (uid or req.headers.get("X-User-Id") or "").strip() or "default"
     samesite, secure = _cookie_attrs(req)
     params = {
         "client_id": cid,
@@ -187,6 +193,14 @@ def oauth_login(service: str, response: Response, req: Request) -> RedirectRespo
     redirect.set_cookie(
         STATE_COOKIE,
         state,
+        max_age=STATE_MAX_AGE,
+        httponly=True,
+        samesite=samesite,
+        secure=secure,
+    )
+    redirect.set_cookie(
+        UID_COOKIE,
+        uid,
         max_age=STATE_MAX_AGE,
         httponly=True,
         samesite=samesite,
@@ -251,9 +265,13 @@ def oauth_callback(
     refresh = body.get("refresh_token")
     expires_in = int(body.get("expires_in", 0) or 0)
     expires_at = (time.time() + expires_in - 60) if expires_in else None
+    # Which local user initiated this flow (per-user connections). Falls back to
+    # the request-scoped user, then "default".
+    uid = (req.cookies.get(UID_COOKIE) if req else None) or store.current_user_id()
     try:
         store.save_token(
             service,
+            user_id=uid,
             access_token=access,
             refresh_token=refresh,
             expires_at=expires_at,
@@ -265,6 +283,7 @@ def oauth_callback(
     redirect = RedirectResponse(f"{_RETURN_TO}&connected={service}" if "?" in _RETURN_TO else f"{_RETURN_TO}?connected={service}")
     response.delete_cookie(STATE_COOKIE)
     response.delete_cookie(VERIFIER_COOKIE)
+    response.delete_cookie(UID_COOKIE)
     return redirect
 
 

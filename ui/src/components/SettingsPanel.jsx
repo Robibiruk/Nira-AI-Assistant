@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { apiFetch, apiError } from '../api'
+import { apiFetch, apiError, userId } from '../api'
 
 const KNOWN = [
   { name: 'ollama', base_url: 'http://localhost:11434/v1', hint: 'Local Ollama' },
@@ -65,8 +65,11 @@ export default function SettingsPanel({ providers, custom, toolKeys = {}, onAdd,
   const connectOAuth = (id) => {
     setOauthBusy(id)
     // Full-page navigation to the provider login (then back via callback).
+    // Pass the local user id so the OAuth token is stored under THIS profile,
+    // not a shared account (per-user connections).
     const base = import.meta.env.VITE_API_BASE && import.meta.env.VITE_API_BASE.replace(/\/+$/, '')
-    const url = base ? `${base}/auth/${id}/login` : `/auth/${id}/login`
+    const uid = userId()
+    const url = (base ? `${base}/auth/${id}/login` : `/auth/${id}/login`) + (uid ? `?uid=${encodeURIComponent(uid)}` : '')
     window.location.href = url
   }
 

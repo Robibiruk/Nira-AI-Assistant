@@ -19,6 +19,17 @@ from __future__ import annotations
 import os
 import threading
 import time
+import contextvars
+
+# Per-request user identity. Set from the `X-User-Id` header (Firebase uid or a
+# local `web-<uuid>` fallback) by a middleware in app.py. Each local NIRA profile
+# gets its OWN OAuth connections instead of sharing one "default" account.
+CURRENT_USER = contextvars.ContextVar("nira_user", default="default")
+
+
+def current_user_id() -> str:
+    uid = CURRENT_USER.get()
+    return uid or "default"
 
 try:
     from cryptography.fernet import Fernet, InvalidToken
@@ -144,8 +155,13 @@ def _redact(d: dict) -> dict:
 
 
 def save_token(service: str, *, access_token: str, refresh_token: str | None = None,
-               expires_at: float | None = None, scopes: list[str] | None = None) -> None:
-    """Encrypt and upsert the token for ``service`` under the local user."""
+               expires_at: float | None = None, scopes: list[str] | None = None,
+               user_id: str | None = None) -> None:
+    """Encrypt and upsert the token for ``service`` under ``user_id``.
+
+    ``user_id`` defaults to the request-scoped current user (see CURRENT_USER).
+    """
+    uid = user_id or current_user_id()
     col = _collection()
     if col is None:
         raise RuntimeError(
@@ -155,9 +171,9 @@ def save_token(service: str, *, access_token: str, refresh_token: str | None = N
     enc_access = _encrypt(access_token)
     enc_refresh = _encrypt(refresh_token) if refresh_token else None
     col.update_one(
-        {"user_id": USER_ID, "service": service},
+        {"user_id": uid, "service": service},
         {"$set": {
-            "user_id": USER_ID,
+            "user_id": uid,
             "service": service,
             "access_token": enc_access,
             "refresh_token": enc_refresh,
@@ -169,12 +185,16 @@ def save_token(service: str, *, access_token: str, refresh_token: str | None = N
     )
 
 
-def get_token(service: str) -> dict | None:
-    """Return the decrypted token record for ``service``, or None if absent."""
+def get_token(service: str, user_id: str | None = None) -> dict | None:
+    """Return the decrypted token record for ``service`` under ``user_id``.
+
+    ``user_id`` defaults to the request-scoped current user.
+    """
+    uid = user_id or current_user_id()
     col = _collection()
     if col is None:
         return None
-    doc = col.find_one({"user_id": USER_ID, "service": service})
+    doc = col.find_one({"user_id": uid, "service": service})
     if not doc:
         return None
     try:
@@ -195,11 +215,12 @@ def get_token(service: str) -> dict | None:
     }
 
 
-def delete_token(service: str) -> None:
+def delete_token(service: str, user_id: str | None = None) -> None:
+    uid = user_id or current_user_id()
     col = _collection()
     if col is None:
         return
-    col.delete_one({"user_id": USER_ID, "service": service})
+    col.delete_one({"user_id": uid, "service": service})
 
 
 def storage_health() -> dict:
@@ -258,10 +279,12 @@ _REFRESH_CFG = {
 }
 
 
-def refresh_token(service: str, current_refresh: str) -> dict | None:
+def refresh_token(service: str, current_refresh: str, user_id: str | None = None) -> dict | None:
     """Exchange a refresh token for a fresh access token. Returns the updated
     record dict (encrypted & persisted) or None if the service isn't refreshable
-    or the refresh failed."""
+    or the refresh failed.
+    """
+    uid = user_id or current_user_id()
     cfg = _REFRESH_CFG.get(service)
     if not cfg:
         return None
@@ -296,22 +319,23 @@ def refresh_token(service: str, current_refresh: str) -> dict | None:
     expires_at = (time.time() + expires_in - 60) if expires_in else None
     save_token(
         service,
+        user_id=uid,
         access_token=access,
         refresh_token=refresh,
         expires_at=expires_at,
         scopes=body.get("scope", "").split() or _REFRESH_SCOPES.get(service, []),
     )
-    return get_token(service)
+    return get_token(service, user_id=uid)
 
 
-def get_access_token(service: str) -> str | None:
+def get_access_token(service: str, user_id: str | None = None) -> str | None:
     """Return a usable (refreshed if needed) access token for ``service``."""
-    rec = get_token(service)
+    rec = get_token(service, user_id=user_id)
     if not rec:
         return None
     expires_at = rec.get("expires_at")
     if expires_at and time.time() >= expires_at and rec.get("refresh_token"):
-        refreshed = refresh_token(service, rec["refresh_token"])
+        refreshed = refresh_token(service, rec["refresh_token"], user_id=user_id)
         if refreshed:
             return refreshed["access_token"]
     return rec["access_token"]

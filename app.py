@@ -57,6 +57,23 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def _user_context(request, call_next):
+    """Set the per-request local-user identity for OAuth connections.
+
+    The SPA sends `X-User-Id` (Firebase anonymous uid, or a `web-<uuid>`
+    fallback). Each local NIRA profile then gets its OWN Spotify/Google/etc.
+    tokens instead of all sharing one 'default' account.
+    """
+    from core.oauth_store import CURRENT_USER
+    uid = (request.headers.get("X-User-Id") or "").strip() or "default"
+    token = CURRENT_USER.set(uid)
+    try:
+        return await call_next(request)
+    finally:
+        CURRENT_USER.reset(token)
+
+
 @app.on_event("startup")
 def _init_providers() -> None:
     """Build the LLM provider list from env keys and seed the active model."""
