@@ -50,16 +50,85 @@ Tools can also be invoked directly with **slash commands** (e.g. `/tools`, `/cle
 - **About** — project info: version, live statistics, creator, roadmap, license, contributing, and a scrolling footer marquee.
 - **Settings** — switch models, add/remove AI providers (OpenRouter + custom providers), and set per-tool API keys (Google, GitHub, Spotify, Tavily, …).
 
-### 🎨 Design & UX
-- **Holographic AI Core Ring** — color-coded state indicator:
-  - 🔵 Blue — Thinking
-  - 🟠 Orange — Executing tools
-  - 🟢 Green — Speaking / replying
-  - 🔴 Red — Error
-  - 🎤 Mic — Listening
-- **JARVIS / Apple-Vision-Pro-inspired dark UI** — cyan + purple neon, glassmorphism, 48px grid, responsive from 360px to 4K.
-- **Font Awesome** (bundled locally, same-origin — no cross-origin storage/tracking-prevention issues), **Audiowide** display font for hero text.
-- Custom restyled scrollbars app-wide (thin cyan thumb).
+### 🆕 What's New
+
+A snapshot of the capabilities added in the latest releases — smarter research, secure account connections, and a transparent "thinking" layer.
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                       NIRA — New Capabilities                          │
+├────────────────┬───────────────────────────────────────────────────── ┤
+│  🌐 Web        │  Smart research agent — reads real pages, not just    │
+│                │  snippet dumps. Streams its steps, then answers.       │
+│  🔗 OAuth      │  One-click Connect for Google (Gmail), GitHub,         │
+│                │  Spotify — per-user tokens, nothing shared.            │
+│  💡 Reasoning  │  Live "Thinking…" stream shown before the answer.      │
+│  🧠 Memory     │  Local-first + Firebase sync, fully private.           │
+└────────────────┴─────────────────────────────────────────────────────┘
+```
+
+#### 🌐 Web — Smart Research
+
+The `web` tool runs an autonomous fetch-based research loop: it searches, opens
+the most relevant result, reads the page, and synthesises a sourced answer —
+all within a 512 MB cloud footprint (no headless Chromium required).
+
+```
+  ┌────────┐   search    ┌──────────┐   pick + fetch   ┌───────────┐
+  │  Query │ ──────────► │  Search  │ ───────────────► │  Content  │
+  └────────┘             │  (Tavily │                  │   Page    │
+       ▲                 │  → DDG → │                  └─────┬─────┘
+       │                 │   Wiki)  │                        │ read
+       │   answer +      └──────────┘                        ▼
+       │   source                                     ┌────────────┐
+       └─────────────────────────────────────────────│  Summarise │
+                                                      └────────────┘
+   Output:  [web · fetch · N steps]  +  answer  +  🔗 source link
+```
+
+- **Resilient search chain** — Tavily (datacenter-friendly) → DuckDuckGo HTML → Wikipedia fallback, so it always returns something useful.
+- **Never loops** — a step-limit safety net summarises the best page it found instead of failing.
+- **Honest** — cites the page it read; says so when a source doesn't fully cover the question.
+
+#### 🔗 OAuth Tool Connections
+
+Connect real accounts from **Settings → Tool Connections** — each user's tokens
+are isolated (no shared credentials), and every tool returns **actionable**
+errors (exact console fix) instead of raw exceptions.
+
+```
+   User ──Connect──► OAuth Consent ──token──► Encrypted per-user store
+                                                      │
+                    ┌─────────────────┬───────────────┼───────────────┐
+                    ▼                 ▼               ▼                 ▼
+                 📧 Gmail          🐙 GitHub       🎧 Spotify      🔑 API keys
+              (read/summarise)   (search/repos)   (search/play)   (Tavily, …)
+```
+
+| Connection | Unlocks | Notes |
+|------------|---------|-------|
+| **Google** | `gmail` — list / read / summarise mail | Add yourself as a Test User if the app is unverified |
+| **GitHub** | repo & code search | Fine-grained token scopes |
+| **Spotify** | search & playback control | Auto token via Client Credentials |
+| **API keys** | Tavily and other keyed tools | Env vars win over Settings |
+
+#### 💡 Live Reasoning ("Thinking-first")
+
+With a reasoning-capable model (e.g. `deepseek/deepseek-r1:free`,
+`qwen/qwq-32b:free`), NIRA shows its work **before** the answer — the wait
+becomes a live, pulsing "💡 Thinking…" stream that quietly collapses once the
+reply begins.
+
+```
+   ┌── while reasoning ──┐          ┌── once answering ──┐
+   │  💡 Thinking…       │  ──────► │  ▸ 💡 Reasoning     │  (collapsed)
+   │  · streams live     │  answer  │  ────────────────── │
+   │  · gently pulses    │  starts  │  Answer leads ↴     │
+   └─────────────────────┘          └────────────────────┘
+```
+
+- Captured from native `reasoning` fields **and** inline `<think>` tags.
+- Purely additive — non-reasoning models simply don't show the block.
 
 ### 🖼️ Favicons
 NIRA ships a favicon **set** (not a single file) so every device picks the right
