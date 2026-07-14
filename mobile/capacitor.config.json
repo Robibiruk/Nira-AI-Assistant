@@ -1,8 +1,0 @@
-{
-  "appId": "com.nira.assistant",
-  "appName": "Nira AI",
-  "webDir": "dist",
-  "server": {
-    "androidScheme": "https"
-  }
-}
