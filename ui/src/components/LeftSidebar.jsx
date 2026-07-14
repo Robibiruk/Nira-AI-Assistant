@@ -79,6 +79,22 @@ export default function LeftSidebar({
               {n.label}
             </button>
           ))}
+          <button
+            className="nav-item nav-download"
+            title="Download the Nira Android app (APK)"
+            onClick={() => {
+              const a = document.createElement('a')
+              a.href = '/assets/Nira.apk'
+              a.download = 'Nira.apk'
+              a.rel = 'noopener'
+              document.body.appendChild(a)
+              a.click()
+              a.remove()
+            }}
+          >
+            <span className="nav-icon">📲</span>
+            Download app
+          </button>
         </nav>
       </div>
     </div>
