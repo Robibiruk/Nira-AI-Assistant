@@ -147,6 +147,36 @@ export default function App() {
       }).catch(() => {})
     }
 
+    // 1c) "Share to Nira": handle text/images/PDFs sent from the Android
+    //     share sheet. The native MainActivity dispatches a 'nira:share'
+    //     CustomEvent (and sets window.__niraShared) when a share arrives.
+    const handleShare = (detail) => {
+      if (!detail) return
+      let prompt
+      if (detail.kind === 'image') {
+        const n = (detail.uris && detail.uris.length) || 0
+        prompt = (n ? `Describe and extract text from this ${n > 1 ? n + ' images' : 'image'}` : 'Describe this image') +
+          (detail.title ? ` (${detail.title})` : '')
+      } else if (detail.kind === 'pdf') {
+        prompt = 'Summarize this PDF / create study notes from it.'
+      } else {
+        const text = (detail.text || '').trim()
+        if (!text) return
+        const looksUrl = /^https?:\/\//.test(text)
+        prompt = looksUrl
+          ? `Summarize this page in 2 minutes: ${text}`
+          : `Explain this: ${text}`
+      }
+      setActivePage('chat')
+      setTimeout(() => sendMessage(prompt), 300)
+    }
+    const onShareEvt = (e) => handleShare(e.detail)
+    window.addEventListener('nira:share', onShareEvt)
+    if (window.__niraShared) {
+      handleShare(window.__niraShared)
+      window.__niraShared = null
+    }
+
     // 2) Background Firebase sync (best-effort; never blocks the UI).
     authReady()
       .then((u) => (u ? u : signInAnon()))
