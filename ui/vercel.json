@@ -1,5 +1,19 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://nira-ai-backend-kzbo.onrender.com/:path*" },
+    { "source": "/models", "destination": "https://nira-ai-backend-kzbo.onrender.com/models" },
+    { "source": "/models/:path*", "destination": "https://nira-ai-backend-kzbo.onrender.com/models/:path*" },
+    { "source": "/providers", "destination": "https://nira-ai-backend-kzbo.onrender.com/providers" },
+    { "source": "/providers/:path*", "destination": "https://nira-ai-backend-kzbo.onrender.com/providers/:path*" },
+    { "source": "/tools/run", "destination": "https://nira-ai-backend-kzbo.onrender.com/tools/run" },
+    { "source": "/tools/keys", "destination": "https://nira-ai-backend-kzbo.onrender.com/tools/keys" },
+    { "source": "/chat", "destination": "https://nira-ai-backend-kzbo.onrender.com/chat" },
+    { "source": "/chat/:path*", "destination": "https://nira-ai-backend-kzbo.onrender.com/chat/:path*" },
+    { "source": "/speak", "destination": "https://nira-ai-backend-kzbo.onrender.com/speak" },
+    { "source": "/status", "destination": "https://nira-ai-backend-kzbo.onrender.com/status" },
+    { "source": "/health", "destination": "https://nira-ai-backend-kzbo.onrender.com/health" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
