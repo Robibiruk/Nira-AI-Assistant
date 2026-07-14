@@ -2,15 +2,32 @@
 // Returns { ok, status, data, text } even when the body is empty/non-JSON.
 
 // Resolve the backend base URL:
-//  - VITE_API_BASE (e.g. https://nira-backend.onrender.com) wins when set (prod/deploy).
+//  - VITE_API_BASE (e.g. https://nira-ai-backend-kzbo.onrender.com) wins when set.
+//  - Inside a Capacitor native app, the webview origin is NOT the backend, so we
+//    use Capacitor's server URL (or a hardcoded fallback) to reach Render.
 //  - On localhost dev, hit the FastAPI backend directly at 127.0.0.1:8000.
 //  - Otherwise (deployed SPA with no VITE_API_BASE), use same-origin so a
 //    host rewrite/proxy can forward /chat, /sessions, etc. to the backend.
-const API_BASE =
-  import.meta.env.VITE_API_BASE ||
-  (typeof location !== 'undefined' && location.hostname === 'localhost'
-    ? 'http://127.0.0.1:8000'
-    : '')
+function resolveApiBase() {
+  if (import.meta.env.VITE_API_BASE) return import.meta.env.VITE_API_BASE
+  const inCapacitor =
+    typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isNativePlatform?.()
+  if (inCapacitor) {
+    try {
+      // Capacitor serves the bundle from a local https://localhost origin; the
+      // app needs the real backend instead.
+      const server = window.Capacitor.getServerUrl?.()
+      if (server) return server
+    } catch { /* ignore */ }
+    return 'https://nira-ai-backend-kzbo.onrender.com'
+  }
+  if (typeof location !== 'undefined' && location.hostname === 'localhost') {
+    return 'http://127.0.0.1:8000'
+  }
+  return ''
+}
+
+const API_BASE = resolveApiBase()
 
 export function apiUrl(path) {
   if (!API_BASE) return path

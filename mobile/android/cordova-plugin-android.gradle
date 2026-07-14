@@ -1,0 +1,20 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.1'
+    }
+}
+
+apply plugin: 'com.android.application'
+
+try {
+    def capFile = file('../../capacitor-cordova-android-plugins/cordova.variables.gradle')
+    if (capFile.exists()) {
+        apply from: capFile
+    }
+} catch (e) {
+    // ignore
+}

@@ -1,0 +1,12 @@
+# Android build artifacts (do not commit)
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/captures/
+mobile/android/.idea/
+*.iml
+mobile/node_modules/
+
+# Capacitor sync output
+mobile/android/app/src/main/assets/public/

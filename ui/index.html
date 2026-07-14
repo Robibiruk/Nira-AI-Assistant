@@ -28,6 +28,9 @@
          cross-origin storage access (Edge Tracking Prevention was blocking
          the cdnjs copy). -->
     <link rel="stylesheet" href="/fontawesome/all.min.css" />
+    <!-- Capacitor bridge (same-origin, copied into dist on `cap sync`).
+         Provides window.Capacitor so the app can detect the native shell. -->
+    <script type="module" src="/capacitor.js"></script>
   </head>
   <body>
     <div id="root"></div>
